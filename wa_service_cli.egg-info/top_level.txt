@@ -1,0 +1,3 @@
+main
+mode_registry
+wa_cli

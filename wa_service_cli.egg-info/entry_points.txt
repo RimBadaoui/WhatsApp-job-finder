@@ -1,0 +1,2 @@
+[console_scripts]
+wa_cli = wa_cli:main

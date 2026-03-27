@@ -1,0 +1,15 @@
+LICENSE
+README.md
+main.py
+mode_registry.py
+pyproject.toml
+wa_cli.py
+tests/test_interactive_parsing.py
+tests/test_media_handling.py
+tests/test_responses.py
+wa_service_cli.egg-info/PKG-INFO
+wa_service_cli.egg-info/SOURCES.txt
+wa_service_cli.egg-info/dependency_links.txt
+wa_service_cli.egg-info/entry_points.txt
+wa_service_cli.egg-info/requires.txt
+wa_service_cli.egg-info/top_level.txt

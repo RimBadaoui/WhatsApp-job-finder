@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wa-service-cli"
+version = "0.1.0"
+description = "WhatsApp service runner and registration CLI"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.111.0",
+  "uvicorn>=0.30.0",
+  "pyngrok>=7.2.0",
+  "python-dotenv>=1.0.1",
+  "requests>=2.32.0",
+]
+
+[tool.setuptools]
+py-modules = ["wa_cli", "mode_registry", "main"]
+
+[project.scripts]
+wa_cli = "wa_cli:main"

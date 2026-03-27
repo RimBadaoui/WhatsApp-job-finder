@@ -1,0 +1,309 @@
+# USCIS Major Commonly Used Forms
+# RAG-friendly plain text format
+# Format notes:
+# - One form per chunk
+# - Consistent field labels
+# - Short aliases included for retrieval
+# - Category and keywords included for semantic / keyword search
+# - Delimiter lines separate records cleanly
+
+==================================================
+FORM_ID: G-28
+FORM_NAME: Notice of Entry of Appearance as Attorney or Accredited Representative
+ALIASES: attorney representation form; accredited representative form
+CATEGORY: General / Administrative
+COMMON_USE: representation before USCIS
+KEYWORDS: attorney, lawyer, representative, accredited representative, appearance, legal representation, USCIS
+PURPOSE: This form is used when an attorney or accredited representative is officially appearing on behalf of an applicant, petitioner, or respondent in a matter before USCIS.
+WHEN_USED: It is commonly submitted when a person wants a lawyer or accredited representative to communicate with USCIS and receive case-related information.
+WHO_FILES: Attorney or accredited representative
+RELATED_FORMS: G-1145
+==================================================
+
+FORM_ID: G-1145
+FORM_NAME: E-Notification of Application/Petition Acceptance
+ALIASES: e-notification form; text message receipt form; email notification form
+CATEGORY: General / Administrative
+COMMON_USE: case receipt notifications
+KEYWORDS: e-notification, text alert, email alert, receipt notice, acceptance, USCIS
+PURPOSE: This form is used to request electronic notification by text message and/or email when USCIS accepts an application or petition at a lockbox facility.
+WHEN_USED: It is usually clipped to the front of a filing package so the applicant can quickly receive confirmation that USCIS accepted the filing.
+WHO_FILES: Applicant or petitioner
+RELATED_FORMS: I-130, I-485, I-765, N-400
+==================================================
+
+FORM_ID: G-884
+FORM_NAME: Request for Return of Original Documents
+ALIASES: return original documents form
+CATEGORY: General / Administrative
+COMMON_USE: requesting original records back
+KEYWORDS: return documents, original documents, evidence, submitted records, USCIS
+PURPOSE: This form is used to ask USCIS to return original documents that were previously submitted.
+WHEN_USED: It is commonly used after a case is completed or when a person needs important original documents back.
+WHO_FILES: Applicant, petitioner, or authorized representative
+RELATED_FORMS: G-28
+==================================================
+
+FORM_ID: I-130
+FORM_NAME: Petition for Alien Relative
+ALIASES: family petition; relative petition
+CATEGORY: Family-Based Immigration
+COMMON_USE: sponsoring a qualifying family member
+KEYWORDS: spouse petition, parent petition, child petition, family green card, relative, petitioner
+PURPOSE: This form is used to establish a qualifying family relationship between a U.S. citizen or lawful permanent resident and a relative who wants to immigrate.
+WHEN_USED: It is commonly the first step in family-based immigration cases involving spouses, parents, children, and siblings where eligible.
+WHO_FILES: U.S. citizen or lawful permanent resident petitioner
+RELATED_FORMS: I-485, I-864, I-130A
+==================================================
+
+FORM_ID: I-129F
+FORM_NAME: Petition for Alien Fiancé(e)
+ALIASES: fiance visa form; K-1 petition
+CATEGORY: Family-Based Immigration
+COMMON_USE: bringing a fiancé(e) to the United States
+KEYWORDS: fiance, fiancée, K-1 visa, marriage petition, engagement, USCIS
+PURPOSE: This form is used by a U.S. citizen to request permission for a foreign fiancé(e) to come to the United States for marriage.
+WHEN_USED: It is filed when the couple plans to marry in the United States within the required period after entry.
+WHO_FILES: U.S. citizen petitioner
+RELATED_FORMS: I-485
+==================================================
+
+FORM_ID: I-485
+FORM_NAME: Application to Register Permanent Residence or Adjust Status
+ALIASES: green card application; adjustment of status form
+CATEGORY: Green Card / Permanent Residence
+COMMON_USE: applying for a green card from inside the United States
+KEYWORDS: adjustment of status, green card, permanent residence, lawful permanent resident, AOS
+PURPOSE: This form is the main application used by eligible individuals in the United States to apply for lawful permanent resident status, also known as a green card.
+WHEN_USED: It is commonly filed after an immigrant petition is approved or when a visa number is available and the applicant is eligible to adjust status.
+WHO_FILES: Eligible applicant inside the United States
+RELATED_FORMS: I-130, I-140, I-765, I-131, I-864, I-693
+==================================================
+
+FORM_ID: I-751
+FORM_NAME: Petition to Remove Conditions on Residence
+ALIASES: remove conditions form; conditional green card removal
+CATEGORY: Green Card / Permanent Residence
+COMMON_USE: converting a 2-year conditional green card into a 10-year green card
+KEYWORDS: remove conditions, marriage green card, conditional resident, joint filing, waiver
+PURPOSE: This form is used to remove the conditions on permanent residence for someone who received a 2-year conditional green card, often through marriage.
+WHEN_USED: It is generally filed during the 90-day period before the conditional resident card expires, unless a waiver basis applies.
+WHO_FILES: Conditional permanent resident, often jointly with spouse
+RELATED_FORMS: I-90
+==================================================
+
+FORM_ID: I-90
+FORM_NAME: Application to Replace Permanent Resident Card
+ALIASES: green card renewal form; replace green card form
+CATEGORY: Green Card / Permanent Residence
+COMMON_USE: renewing or replacing a green card
+KEYWORDS: green card renewal, replacement card, lost green card, expired card, permanent resident card
+PURPOSE: This form is used to renew or replace a Permanent Resident Card, also known as a green card.
+WHEN_USED: It is filed when a green card is expiring, lost, stolen, damaged, or contains incorrect information.
+WHO_FILES: Lawful permanent resident
+RELATED_FORMS: I-751, N-400
+==================================================
+
+FORM_ID: I-129
+FORM_NAME: Petition for a Nonimmigrant Worker
+ALIASES: work visa petition; temporary worker petition
+CATEGORY: Employment-Based Immigration
+COMMON_USE: requesting temporary worker classification
+KEYWORDS: H-1B, L-1, O-1, P visa, R-1, TN-related employer filing, nonimmigrant worker
+PURPOSE: This form is used by employers to petition for a foreign national to work in the United States in certain temporary or nonimmigrant classifications.
+WHEN_USED: It is commonly filed for work visa categories such as H-1B, L-1, O-1, P, and R classifications.
+WHO_FILES: U.S. employer or qualifying petitioner
+RELATED_FORMS: I-539, I-765
+==================================================
+
+FORM_ID: I-140
+FORM_NAME: Immigrant Petition for Alien Worker
+ALIASES: employment green card petition; immigrant worker petition
+CATEGORY: Employment-Based Immigration
+COMMON_USE: sponsoring a worker for permanent residence
+KEYWORDS: employment-based green card, EB-1, EB-2, EB-3, immigrant worker, PERM
+PURPOSE: This form is used by an employer, and in some categories by the individual, to petition for an immigrant worker to become a lawful permanent resident.
+WHEN_USED: It is commonly filed in employment-based immigrant visa categories as part of the green card process.
+WHO_FILES: Employer or self-petitioning individual where allowed
+RELATED_FORMS: I-485
+==================================================
+
+FORM_ID: I-765
+FORM_NAME: Application for Employment Authorization
+ALIASES: work permit form; EAD application
+CATEGORY: Employment / Benefits
+COMMON_USE: applying for a work permit
+KEYWORDS: work permit, EAD, employment authorization document, authorization to work
+PURPOSE: This form is used by eligible noncitizens to request employment authorization and receive an Employment Authorization Document.
+WHEN_USED: It is often filed with or after another immigration application, such as adjustment of status, asylum, TPS, or certain student-related categories.
+WHO_FILES: Eligible applicant
+RELATED_FORMS: I-485, I-589, I-821
+==================================================
+
+FORM_ID: I-526E
+FORM_NAME: Immigrant Petition by Regional Center Investor
+ALIASES: EB-5 investor petition; regional center investor form
+CATEGORY: Employment-Based Immigration / Investor
+COMMON_USE: seeking permanent residence through qualifying investment
+KEYWORDS: EB-5, investor visa, regional center, investment immigration, job creation
+PURPOSE: This form is used by certain immigrant investors associated with a regional center to request classification under the EB-5 immigrant investor program.
+WHEN_USED: It is filed when an investor seeks a green card based on a qualifying investment that meets EB-5 program requirements.
+WHO_FILES: Qualifying immigrant investor
+RELATED_FORMS: I-485, I-829
+==================================================
+
+FORM_ID: I-539
+FORM_NAME: Application To Extend/Change Nonimmigrant Status
+ALIASES: extend stay form; change status form
+CATEGORY: Nonimmigrant Status
+COMMON_USE: extending or changing temporary immigration status
+KEYWORDS: extend visa status, change status, visitor extension, student status, dependent status
+PURPOSE: This form is used by certain nonimmigrants to request an extension of stay or a change from one nonimmigrant status to another.
+WHEN_USED: It is commonly filed by visitors, students, dependents, and others who are eligible to extend or change status without leaving the United States.
+WHO_FILES: Eligible nonimmigrant applicant
+RELATED_FORMS: I-129, I-94
+==================================================
+
+FORM_ID: I-94
+FORM_NAME: Arrival/Departure Record
+ALIASES: I-94 travel record; entry record
+CATEGORY: Nonimmigrant Status / Travel Record
+COMMON_USE: proving lawful entry and authorized stay
+KEYWORDS: arrival record, departure record, lawful entry, admission record, class of admission
+PURPOSE: This record documents a noncitizen's admission into the United States, including class of admission and authorized period of stay.
+WHEN_USED: It is used to verify status, entry date, and expiration or duration of authorized stay.
+WHO_FILES: Not typically filed as a standard USCIS application; record issued by government systems
+RELATED_FORMS: I-102, I-539
+==================================================
+
+FORM_ID: N-400
+FORM_NAME: Application for Naturalization
+ALIASES: citizenship application; naturalization form
+CATEGORY: Citizenship / Naturalization
+COMMON_USE: applying to become a U.S. citizen
+KEYWORDS: naturalization, citizenship, civics test, English test, oath ceremony
+PURPOSE: This form is used by lawful permanent residents and certain other eligible individuals to apply for U.S. citizenship through naturalization.
+WHEN_USED: It is filed after meeting eligibility requirements such as residency, physical presence, and good moral character.
+WHO_FILES: Eligible applicant for naturalization
+RELATED_FORMS: N-648, N-336, I-90
+==================================================
+
+FORM_ID: N-600
+FORM_NAME: Application for Certificate of Citizenship
+ALIASES: certificate of citizenship form
+CATEGORY: Citizenship / Naturalization
+COMMON_USE: obtaining formal proof of citizenship
+KEYWORDS: citizenship proof, derived citizenship, acquired citizenship, certificate
+PURPOSE: This form is used to obtain a Certificate of Citizenship for a person who already became a U.S. citizen through parents by birth abroad or derivation.
+WHEN_USED: It is filed when someone needs formal evidence of citizenship but is not applying to naturalize.
+WHO_FILES: U.S. citizen applicant or parent/legal guardian on behalf of child
+RELATED_FORMS: N-400
+==================================================
+
+FORM_ID: N-336
+FORM_NAME: Request for a Hearing on a Decision in Naturalization Proceedings
+ALIASES: naturalization appeal form; citizenship denial hearing request
+CATEGORY: Citizenship / Naturalization
+COMMON_USE: challenging a denied naturalization application
+KEYWORDS: N-400 denial, hearing request, naturalization review, citizenship appeal
+PURPOSE: This form is used to request a hearing after USCIS denies a naturalization application.
+WHEN_USED: It is filed when an applicant believes USCIS wrongly denied the N-400 and wants administrative review.
+WHO_FILES: Naturalization applicant
+RELATED_FORMS: N-400
+==================================================
+
+FORM_ID: I-589
+FORM_NAME: Application for Asylum and for Withholding of Removal
+ALIASES: asylum form; withholding of removal application
+CATEGORY: Humanitarian
+COMMON_USE: seeking protection from persecution
+KEYWORDS: asylum, persecution, refugee protection, fear of return, withholding of removal
+PURPOSE: This form is used by individuals in the United States to request asylum and withholding of removal based on fear of persecution in their home country.
+WHEN_USED: It is filed when a person seeks humanitarian protection because they fear harm based on a protected ground.
+WHO_FILES: Applicant seeking asylum or withholding
+RELATED_FORMS: I-765
+==================================================
+
+FORM_ID: I-918
+FORM_NAME: Petition for U Nonimmigrant Status
+ALIASES: U visa form; crime victim visa petition
+CATEGORY: Humanitarian
+COMMON_USE: immigration relief for victims who assist law enforcement
+KEYWORDS: U visa, crime victim, law enforcement certification, victim protection, humanitarian relief
+PURPOSE: This form is used by eligible victims of certain crimes who have suffered abuse and have been helpful, are being helpful, or are likely to be helpful to law enforcement.
+WHEN_USED: It is filed when a qualifying crime victim seeks temporary lawful status and related immigration protection.
+WHO_FILES: Eligible crime victim or qualifying applicant
+RELATED_FORMS: I-192, I-765
+==================================================
+
+FORM_ID: I-360
+FORM_NAME: Petition for Amerasian, Widow(er), or Special Immigrant
+ALIASES: VAWA self-petition form; special immigrant petition
+CATEGORY: Humanitarian / Special Immigrant
+COMMON_USE: special immigrant and certain humanitarian classifications
+KEYWORDS: VAWA, widow petition, religious worker, special immigrant juvenile, SIJ
+PURPOSE: This form is used for several special immigrant categories, including certain abused spouses, children, and parents under VAWA, widows or widowers of U.S. citizens, religious workers, and some other special classifications.
+WHEN_USED: It is filed when a person qualifies under one of the special immigrant categories recognized by immigration law.
+WHO_FILES: Eligible self-petitioner or applicant in a qualifying category
+RELATED_FORMS: I-485
+==================================================
+
+FORM_ID: I-131
+FORM_NAME: Application for Travel Document
+ALIASES: advance parole form; reentry permit form; refugee travel document form
+CATEGORY: Travel / Re-Entry
+COMMON_USE: requesting permission or documentation for travel
+KEYWORDS: advance parole, reentry permit, refugee travel document, travel authorization
+PURPOSE: This form is used to request certain travel documents, including advance parole, refugee travel documents, and re-entry permits.
+WHEN_USED: It is commonly filed by adjustment applicants, permanent residents who need a re-entry permit, and certain humanitarian applicants.
+WHO_FILES: Eligible applicant
+RELATED_FORMS: I-485
+==================================================
+
+FORM_ID: I-102
+FORM_NAME: Application for Replacement/Initial Nonimmigrant Arrival-Departure Document
+ALIASES: replace I-94 form
+CATEGORY: Travel / Records
+COMMON_USE: replacing or obtaining an I-94 document
+KEYWORDS: replace I-94, initial I-94, arrival departure document, correction of record
+PURPOSE: This form is used to request a replacement or, in certain situations, an initial Arrival-Departure Document.
+WHEN_USED: It is filed when a nonimmigrant needs a replacement I-94 or a proper arrival-departure record.
+WHO_FILES: Eligible nonimmigrant applicant
+RELATED_FORMS: I-94, I-539
+==================================================
+
+FORM_ID: I-290B
+FORM_NAME: Notice of Appeal or Motion
+ALIASES: USCIS appeal form; motion to reopen form; motion to reconsider form
+CATEGORY: Appeals / Motions
+COMMON_USE: appealing or challenging a USCIS decision
+KEYWORDS: appeal, motion to reopen, motion to reconsider, adverse decision, USCIS denial
+PURPOSE: This form is used to file an appeal with the Administrative Appeals Office in eligible cases or to ask USCIS to reopen or reconsider a decision.
+WHEN_USED: It is filed after a denial, revocation, or other unfavorable decision when the form instructions permit appeal or motion practice.
+WHO_FILES: Applicant, petitioner, or authorized representative
+RELATED_FORMS: G-28
+==================================================
+
+FORM_ID: I-864
+FORM_NAME: Affidavit of Support Under Section 213A of the INA
+ALIASES: affidavit of support form; sponsor financial support form
+CATEGORY: Financial Support
+COMMON_USE: proving a sponsor can financially support an immigrant
+KEYWORDS: sponsor, income requirement, financial support, family immigration, public charge
+PURPOSE: This form is used to show that an intending immigrant has adequate financial support and is not likely to become primarily dependent on the government.
+WHEN_USED: It is commonly required in family-based green card cases and some employment-based cases when a relative has an ownership interest.
+WHO_FILES: Sponsoring relative or joint sponsor
+RELATED_FORMS: I-130, I-485
+==================================================
+
+FORM_ID: I-912
+FORM_NAME: Request for Fee Waiver
+ALIASES: USCIS fee waiver form
+CATEGORY: Financial Support / Fees
+COMMON_USE: asking USCIS to waive filing fees
+KEYWORDS: fee waiver, low income, inability to pay, filing fee, USCIS fees
+PURPOSE: This form is used to request that USCIS waive certain filing fees for eligible applicants who cannot afford to pay.
+WHEN_USED: It is filed with eligible applications or petitions when the person qualifies based on means-tested benefits, low income, or financial hardship.
+WHO_FILES: Eligible applicant or petitioner
+RELATED_FORMS: N-400, I-90, I-765
+==================================================
