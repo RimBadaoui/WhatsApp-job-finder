@@ -1,4 +1,5 @@
 from llmproxy import LLMProxy
+from wa_service_sdk import BaseEvent, TextEvent, InteractiveEvent, create_message, create_buttoned_message, create_list_message
 import json
 
 # ----------------------------
@@ -9,97 +10,158 @@ client = LLMProxy()
 MODEL_NAME = "4o-mini"
 TEMPERATURE = 0.0
 LAST_K = 10
-SESSION_ID = "conversation"
 
 # ----------------------------
-# Intro message
+# Messages
 # ----------------------------
-INTRO_MESSAGE = """
-Assistant: Hi! I’m an employment support chatbot for immigrants in Greater Boston.
+INTRO_MESSAGE = """Hi! 👋 I'm an employment support assistant for immigrants in Greater Boston.
 
 I can help you find:
-- job resources
-- workforce training programs
-- resume help
-- local organizations that support employment
+- Job opportunities and resources
+- Workforce training programs
+- Resume help
+- Local organizations that support employment
 
-I give general information based on trusted resources.
-I’m not a lawyer, so I can’t give legal advice about visas, immigration status, or work authorization.
-I also won’t ask for sensitive information like Social Security numbers or passport numbers.
+I only help with employment-related questions. For legal advice about visas or immigration status, please contact a qualified attorney.
 
-I’ll ask a few short questions so I can suggest resources that may fit your needs.
-"""
+To get started — what language do you prefer?"""
+
+OUT_OF_SCOPE_RESPONSE = "I'm only able to help with employment and job-related questions. For anything else, I'd recommend reaching out to a relevant local organization. Is there anything job-related I can help you with?"
+
+LEGAL_RESPONSE = (
+    "I can share general employment resources, but I can't give legal advice about "
+    "immigration status, visas, or work authorization. For trusted help, please contact "
+    "a qualified immigration attorney or a local organization such as the "
+    "International Institute of New England. Is there anything employment-related I can help you with?"
+)
 
 # ----------------------------
-# User profile schema
+# Per-user state
 # ----------------------------
-profile = {
-    "preferred_language": None,
-    "location": None,
-    "employment_goal": None,
-    "job_interests": [],
-    "work_experience": None,
-    "english_level": None,
-    "transportation_access": None,
-    "needs_nearby_work": False,
-    "needs_remote_work": False,
-    "needs_training": None,
-    "needs_worker_rights_help": False,
-    "availability": None,
-    "has_resume": None,
-    "open_questions": []
+user_sessions = {}
+
+def new_profile():
+    return {
+        "name": None,
+        "preferred_language": None,
+        "location": None,
+        "employment_goal": None,
+        "job_interests": [],
+        "work_experience": None,
+        "english_level": None,
+        "transportation_access": None,
+        "needs_nearby_work": False,
+        "needs_remote_work": False,
+        "needs_training": None,
+        "needs_worker_rights_help": False,
+        "availability": None,
+        "has_resume": None,
+        "open_questions": []
+    }
+
+def get_session(user_id):
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {
+            "profiles": [new_profile()],
+            "active_profile_index": 0,
+            "conversation_history": [],
+            "greeted": False,
+            "onboarding_step": "language",  # language -> comfort -> done
+            "awaiting_profile_clarification": False,
+        }
+    return user_sessions[user_id]
+
+def active_profile(session):
+    return session["profiles"][session["active_profile_index"]]
+
+# ----------------------------
+# Interactive field map
+# ----------------------------
+INTERACTIVE_FIELD_MAP = {
+    "lang_english": ("preferred_language", "English"),
+    "lang_arabic": ("preferred_language", "Arabic"),
+    "english_beginner": ("english_level", "beginner"),
+    "english_intermediate": ("english_level", "intermediate"),
+    "english_advanced": ("english_level", "advanced"),
+    "transport_car": ("transportation_access", "has car"),
+    "transport_transit": ("transportation_access", "public transit only"),
+    "transport_limited": ("transportation_access", "limited transportation"),
+    "availability_fulltime": ("availability", "full-time"),
+    "availability_parttime": ("availability", "part-time"),
+    "availability_either": ("availability", "either"),
+    "resume_yes": ("has_resume", "yes"),
+    "resume_no": ("has_resume", "no"),
+    "training_yes": ("needs_training", True),
+    "training_no": ("needs_training", False),
 }
 
-# Track question flow in Python
-asked_fields = []
-current_question_field = None
-last_question_text = None
+# ----------------------------
+# Prompts
+# ----------------------------
+SCOPE_CLASSIFIER_PROMPT = '''
+You are a guardrail for an employment support chatbot.
 
-# ----------------------------
-# Prompt for profile updating
-# ----------------------------
+Classify the user message into one of these categories:
+- "employment": the message is about jobs, work, training, resume, career, workforce, employment resources, or related topics
+- "legal": the message is about visas, green cards, asylum, undocumented status, work authorization, immigration papers
+- "other": the message is clearly unrelated to employment (e.g. weather, sports, personal relationships, health, etc.)
+
+Return only one word: employment, legal, or other.
+'''
+
+THIRD_PARTY_CLASSIFIER_PROMPT = '''
+You are a guardrail for an employment support chatbot.
+
+Determine if the user's message is asking about someone else (a friend, family member, spouse, etc.) rather than themselves.
+
+Examples of third-party messages:
+- "My friend needs a job"
+- "Can you help my sister find work?"
+- "My husband is looking for training programs"
+
+Examples of self-messages:
+- "I need a job"
+- "I'm looking for work in Boston"
+- "Do you have resume help?"
+
+Return only one word: self or other.
+'''
+
 PROFILE_BUILDER_PROMPT = '''
-You are a profile builder for a multilingual employment-resource chatbot that supports immigrants and immigrant families in Greater Boston.
+You are a profile builder for a multilingual employment-resource chatbot that supports immigrants in Greater Boston.
 
-Your task is to update the user's structured employment profile based on:
-1. the current profile
-2. the assistant's last question field
-3. the assistant's last question text
-4. the user's latest message
+Update the user's structured employment profile based on the full conversation history and the latest user message.
 
-Only extract information the user explicitly states or clearly implies.
-Do not guess.
+Only extract information the user explicitly states or clearly implies. Do not guess.
 Preserve existing values unless the user provides new conflicting information.
 Return only valid JSON.
 
-Important rules:
-- Use LAST_ASKED_FIELD as the strongest clue for how to interpret short answers like "yes", "no", "beginner", "Boston", or "retail".
-- If the latest user message is a short answer to the last asked question, update that field directly.
-- Do not move a short answer to some other unrelated field unless the user clearly says more.
+Rules:
 - If the user says "no" to work_experience, set work_experience to "no prior work experience".
 - If the user says "yes" to needs_training, set needs_training to true.
 - If the user says "no" to needs_training, set needs_training to false.
 - If the user says "yes" to has_resume, set has_resume to "yes".
 - If the user says "no" to has_resume, set has_resume to "no".
-- Keep open_questions as an empty list; the Python program decides what to ask next.
+- If the user mentions their name, set name to that value.
+- Keep open_questions as an empty list.
 
-Normalization rules:
-- preferred_language: short value like "English", "Spanish", "Portuguese", "Haitian Creole"
-- location: broad place like "Boston", "Chelsea", "East Boston", "Somerville", "Greater Boston"
-- employment_goal: short summary like "find a job", "find job training", "resume help"
+Normalization:
+- preferred_language: only "English" or "Arabic"
+- location: "Boston", "Chelsea", "East Boston", "Somerville", "Greater Boston", etc.
+- employment_goal: "find a job", "find job training", "resume help", etc.
 - job_interests: list of job types or industries
-- work_experience: short summary like "retail experience", "cleaning experience", "no prior work experience"
+- work_experience: short summary like "retail experience", "no prior work experience"
 - english_level: "beginner", "intermediate", or "advanced"
-- transportation_access: short value like "has car", "public transit only", "limited transportation", "no transportation"
-- availability: short value like "full-time", "part-time", "either"
-- has_resume: short value like "yes", "no", "needs help making one"
-
-If the user says "I need a job" or something similar, set employment_goal to "find a job".
+- transportation_access: "has car", "public transit only", "limited transportation", "no transportation"
+- availability: "full-time", "part-time", or "either"
+- has_resume: "yes", "no", or "needs help making one"
+- name: first name or full name if provided
 
 Return the full updated JSON object and nothing else.
 
 Schema:
 {
+  "name": null,
   "preferred_language": null,
   "location": null,
   "employment_goal": null,
@@ -117,83 +179,48 @@ Schema:
 }
 '''
 
-# ----------------------------
-# Prompt for final recommendation with RAG + guardrails
-# ----------------------------
-RECOMMENDATION_PROMPT = '''
-You are an AI assistant designed to help immigrants in the Greater Boston area find employment resources, job opportunities, and workforce training programs.
+NEXT_QUESTION_PROMPT = '''
+You are a warm, conversational employment support assistant helping immigrants in Greater Boston.
 
-Your goal is to provide helpful, accurate, and safe guidance.
+You are in the middle of an intake conversation. Your job is to ask the single most natural next question to fill in missing profile information, based on the conversation so far.
 
-You must follow these rules:
+Missing fields still needed:
+{missing_fields}
 
-1. DO NOT provide legal advice about immigration status, visas, asylum, green cards, or work authorization.
-2. DO NOT tell undocumented users definitively whether they can or cannot work.
-3. DO NOT make up information. Only provide information supported by the retrieved trusted sources. If the retrieved context does not support something, say so clearly.
-4. If you are unsure, say "I’m not sure" and suggest a trusted organization or resource.
-5. DO NOT ask for sensitive personal information such as Social Security numbers, passport numbers, or detailed legal status.
-6. Keep responses simple, clear, supportive, and easy to understand.
-7. Stay focused on employment-related support such as jobs, training, resume help, workforce programs, and employment-related organizations.
-8. If a question is outside your scope, politely say: "I focus on employment support, but I can still try to give general advice based on what information is available."
-9. Do not guarantee outcomes or make promises.
-10. Always prioritize user safety and trust.
+Rules:
+- Ask only ONE question at a time.
+- Make it feel natural and conversational, not like a form.
+- If the user introduced themselves with a lot of info, acknowledge it warmly first.
+- Build on what the user already said when possible.
+- Do not repeat questions already answered.
+- Do not ask about sensitive legal or immigration status.
+- Keep it short and friendly.
 
-Core guardrails:
-- No hallucination: only recommend organizations, programs, benefits, or eligibility details that are supported by the retrieved context.
-- If the retrieved context is missing or unclear, say: "I’m not sure about that" or "Let me connect you to a trusted resource."
-- No legal advice: if the user asks about visas, green cards, asylum, undocumented status, or whether they are allowed to work, give only general non-legal guidance, include a brief disclaimer, and redirect to a trusted organization.
-- No assumptions: do not assume the user's immigration status or legal situation.
-- No judgment: use neutral, respectful language.
-- Avoid bureaucratic language.
-
-When relevant, suggest local organizations such as MassHire, JVS Boston, or the International Institute of New England, but only if they are supported by the retrieved context.
-
-If the user may need legal help, encourage them to contact a qualified immigration attorney or trusted organization.
-
-Use the retrieved context as your main source of truth.
-
-Your response should:
-1. Briefly acknowledge the user's situation.
-2. Recommend 2-4 relevant resources, programs, or organizations.
-3. For each one, explain why it matches the user's profile.
-4. Give a short "next steps" section.
-5. If needed, include a brief disclaimer that this is general information, not legal advice.
-6. Be concise but useful.
-
-If the user's English level is beginner, prioritize beginner-friendly or language-supportive resources when possible.
-If the user needs training, prioritize training and workforce development programs.
-If the user has no resume, mention resume help if the retrieved context supports it.
-If the user has transportation constraints, prefer nearby or transit-accessible options when the retrieved context supports it.
-
-Do not output JSON.
+Return only the question text, nothing else.
 '''
 
-# ----------------------------
-# Question flow handled in Python
-# ----------------------------
-QUESTION_ORDER = [
-    "job_interests",
-    "location",
-    "preferred_language",
-    "english_level",
-    "work_experience",
-    "transportation_access",
-    "availability",
-    "has_resume",
-    "needs_training"
-]
+RECOMMENDATION_PROMPT = '''
+You are an AI assistant helping immigrants in Greater Boston find employment resources, job opportunities, and workforce training programs.
 
-QUESTIONS = {
-    "job_interests": "What kind of job are you interested in?",
-    "location": "What area do you live in or want to work in?",
-    "preferred_language": "What language do you prefer to use with me?",
-    "english_level": "How comfortable are you with English at work: beginner, intermediate, or advanced?",
-    "work_experience": "Do you have any past work experience?",
-    "transportation_access": "Do you have a car, public transit, or limited transportation?",
-    "availability": "Are you looking for full-time, part-time, or either?",
-    "has_resume": "Do you already have a resume, or do you need help making one?",
-    "needs_training": "Would job training or help building skills be useful for you? You can say yes or no."
-}
+Rules:
+1. DO NOT provide legal advice about immigration, visas, asylum, green cards, or work authorization.
+2. DO NOT make up information. Only use information supported by the retrieved sources.
+3. If unsure, say "I'm not sure" and suggest a trusted organization.
+4. DO NOT ask for sensitive personal information.
+5. Keep responses simple, clear, supportive, and easy to understand.
+6. Stay focused on employment support only.
+7. Do not guarantee outcomes or make promises.
+
+Your response should:
+1. Address the user by name if known.
+2. Briefly acknowledge their situation.
+3. Recommend 2-4 relevant resources or organizations with explanations.
+4. Give a short "next steps" section.
+5. Include a disclaimer that this is general information, not legal advice, if relevant.
+
+Tailor to: English level, training needs, resume status, transportation constraints.
+Do not output JSON.
+'''
 
 # ----------------------------
 # Helpers
@@ -204,10 +231,9 @@ def safe_json_load(text: str):
     except json.JSONDecodeError:
         return None
 
-
-def merge_profile(current_profile, new_profile):
+def merge_profile(current_profile, new_profile_data):
     merged = current_profile.copy()
-    for key, value in new_profile.items():
+    for key, value in new_profile_data.items():
         if key not in merged:
             continue
         if value is None:
@@ -215,174 +241,435 @@ def merge_profile(current_profile, new_profile):
         merged[key] = value
     return merged
 
+def get_missing_fields(profile_dict):
+    missing = []
+    if not profile_dict.get("job_interests"):
+        missing.append("job interests (what kind of work they're looking for)")
+    if not profile_dict.get("location"):
+        missing.append("location (what area they live in or want to work in)")
+    if profile_dict.get("work_experience") is None:
+        missing.append("past work experience")
+    if profile_dict.get("transportation_access") is None:
+        missing.append("transportation access (car, public transit, limited)")
+    if profile_dict.get("availability") is None:
+        missing.append("availability (full-time, part-time, either)")
+    if profile_dict.get("has_resume") is None:
+        missing.append("whether they have a resume or need help making one")
+    if profile_dict.get("needs_training") is None:
+        missing.append("whether they want job training or skill-building")
+    return missing
 
 def enough_info(profile_dict):
-    required_checks = [
-        bool(profile_dict["job_interests"]),
-        bool(profile_dict["location"]),
-        bool(profile_dict["preferred_language"]),
-        bool(profile_dict["english_level"]),
-        profile_dict["work_experience"] is not None,
-        profile_dict["transportation_access"] is not None,
-        profile_dict["availability"] is not None,
-        profile_dict["has_resume"] is not None,
-        profile_dict["needs_training"] is not None
-    ]
-    return all(required_checks)
-
-
-def get_next_question(profile_dict, asked_fields_list):
-    for field in QUESTION_ORDER:
-        if field in asked_fields_list:
-            continue
-
-        if field == "job_interests" and not profile_dict["job_interests"]:
-            return field, QUESTIONS[field]
-
-        if field != "job_interests" and profile_dict[field] is None:
-            return field, QUESTIONS[field]
-
-    return None, None
-
-
-def print_profile(profile_dict):
-    print("\nCurrent profile:")
-    print(json.dumps(profile_dict, indent=2, ensure_ascii=False))
-
+    return len(get_missing_fields(profile_dict)) == 0
 
 def build_profile_summary(profile_dict):
     return (
-        f"Preferred language: {profile_dict['preferred_language'] or 'Unknown'}\n"
-        f"Location: {profile_dict['location'] or 'Unknown'}\n"
-        f"Employment goal: {profile_dict['employment_goal'] or 'Unknown'}\n"
-        f"Job interests: {', '.join(profile_dict['job_interests']) if profile_dict['job_interests'] else 'Unknown'}\n"
-        f"Work experience: {profile_dict['work_experience'] or 'Unknown'}\n"
-        f"English level: {profile_dict['english_level'] or 'Unknown'}\n"
-        f"Transportation access: {profile_dict['transportation_access'] or 'Unknown'}\n"
-        f"Needs nearby work: {profile_dict['needs_nearby_work']}\n"
-        f"Needs remote work: {profile_dict['needs_remote_work']}\n"
-        f"Needs training: {profile_dict['needs_training']}\n"
-        f"Needs worker rights help: {profile_dict['needs_worker_rights_help']}\n"
-        f"Availability: {profile_dict['availability'] or 'Unknown'}\n"
-        f"Has resume: {profile_dict['has_resume'] or 'Unknown'}"
+        f"Name: {profile_dict.get('name') or 'Unknown'}\n"
+        f"Preferred language: {profile_dict.get('preferred_language') or 'Unknown'}\n"
+        f"English level: {profile_dict.get('english_level') or 'Unknown'}\n"
+        f"Location: {profile_dict.get('location') or 'Unknown'}\n"
+        f"Employment goal: {profile_dict.get('employment_goal') or 'Unknown'}\n"
+        f"Job interests: {', '.join(profile_dict['job_interests']) if profile_dict.get('job_interests') else 'Unknown'}\n"
+        f"Work experience: {profile_dict.get('work_experience') or 'Unknown'}\n"
+        f"Transportation access: {profile_dict.get('transportation_access') or 'Unknown'}\n"
+        f"Needs nearby work: {profile_dict.get('needs_nearby_work', False)}\n"
+        f"Needs remote work: {profile_dict.get('needs_remote_work', False)}\n"
+        f"Needs training: {profile_dict.get('needs_training')}\n"
+        f"Needs worker rights help: {profile_dict.get('needs_worker_rights_help', False)}\n"
+        f"Availability: {profile_dict.get('availability') or 'Unknown'}\n"
+        f"Has resume: {profile_dict.get('has_resume') or 'Unknown'}"
     )
 
+def format_conversation_history(history):
+    return "\n".join(f"{t['role'].capitalize()}: {t['text']}" for t in history)
 
-def looks_like_legal_question(user_message: str) -> bool:
-    text = user_message.lower()
-    triggers = [
-        "visa",
-        "green card",
-        "am i allowed to work",
-        "can i work",
-        "asylum",
-        "undocumented",
-        "work authorization",
-        "legal status",
-        "papers"
-    ]
-    return any(trigger in text for trigger in triggers)
+def classify_scope(user_message: str, user_id: str, session: dict) -> str:
+    # During intake, trust all responses as employment-related
+    if session.get("onboarding_step") == "done":
+        missing = get_missing_fields(active_profile(session))
+        if missing:
+            return "employment"
+    result = client.generate(
+        model=MODEL_NAME,
+        system=SCOPE_CLASSIFIER_PROMPT,
+        query=user_message,
+        temperature=0.0,
+        lastk=1,
+        session_id=f"{user_id}_scope",
+        rag_usage=False
+    )
+    return result["result"].strip().lower()
 
+def classify_third_party(user_message: str, user_id: str) -> str:
+    result = client.generate(
+        model=MODEL_NAME,
+        system=THIRD_PARTY_CLASSIFIER_PROMPT,
+        query=user_message,
+        temperature=0.0,
+        lastk=1,
+        session_id=f"{user_id}_thirdparty",
+        rag_usage=False
+    )
+    return result["result"].strip().lower()
 
-def build_recommendation_with_rag(profile_dict):
-    """
-    Uses the uploaded files in the same session via LLMProxy RAG.
-    Assumes your proxy will retrieve from files attached to this session
-    when rag_usage=True.
-    """
+def build_recommendation_with_rag(profile_dict, user_id):
     profile_summary = build_profile_summary(profile_dict)
-
     recommendation = client.generate(
         model=MODEL_NAME,
         system=RECOMMENDATION_PROMPT,
         query=(
-            "Use the retrieved documents and the user profile below to recommend relevant employment resources in Greater Boston.\n\n"
-            "USER PROFILE:\n"
-            f"{profile_summary}\n\n"
-            "Focus on programs, organizations, job resources, training opportunities, and next steps that fit this user.\n"
+            "Use the retrieved documents and the user profile below to recommend relevant "
+            "employment resources in Greater Boston.\n\n"
+            f"USER PROFILE:\n{profile_summary}\n\n"
+            "Focus on programs, organizations, job resources, training opportunities, and next steps.\n"
             "If the retrieved context does not support a recommendation, do not make it up.\n"
         ),
         temperature=TEMPERATURE,
         lastk=LAST_K,
-        session_id=SESSION_ID,
+        session_id=user_id,
         rag_usage=True
     )
-
     return recommendation["result"]
+
+def get_next_question_from_llm(profile_dict, conversation_history, user_id):
+    missing = get_missing_fields(profile_dict)
+    missing_str = "\n".join(f"- {f}" for f in missing)
+    history_str = format_conversation_history(conversation_history)
+    result = client.generate(
+        model=MODEL_NAME,
+        system=NEXT_QUESTION_PROMPT.format(missing_fields=missing_str),
+        query=(
+            f"CONVERSATION SO FAR:\n{history_str}\n\n"
+            "What is the single best next question to ask?"
+        ),
+        temperature=0.3,
+        lastk=LAST_K,
+        session_id=f"{user_id}_questions",
+        rag_usage=False
+    )
+    return result["result"].strip()
+
+def update_profile_from_history(session, user_id):
+    profile = active_profile(session)
+    history_str = format_conversation_history(session["conversation_history"])
+    profile_builder = client.generate(
+        model=MODEL_NAME,
+        system=PROFILE_BUILDER_PROMPT,
+        query=(
+            f"CURRENT_PROFILE_JSON:\n{json.dumps(profile, ensure_ascii=False)}\n\n"
+            f"CONVERSATION HISTORY:\n{history_str}\n\n"
+            "Return only the full updated JSON object."
+        ),
+        temperature=TEMPERATURE,
+        lastk=LAST_K,
+        session_id=user_id,
+        rag_usage=False
+    )
+    parsed = safe_json_load(profile_builder["result"])
+    if parsed is not None:
+        session["profiles"][session["active_profile_index"]] = merge_profile(profile, parsed)
+
+# ----------------------------
+# Interactive UI helpers
+# ----------------------------
+def language_buttons(user_id):
+    return create_buttoned_message(
+        user_id=user_id,
+        text="What language do you prefer? We support English and Arabic.",
+        buttons=[
+            {"id": "lang_english", "title": "English"},
+            {"id": "lang_arabic", "title": "Arabic"},
+        ]
+    )
+
+def english_level_list(user_id):
+    return create_list_message(
+        user_id=user_id,
+        text="How comfortable are you with English at work?",
+        button_text="Select level",
+        rows=[
+            {"id": "english_beginner", "title": "Beginner", "description": "Basic or limited English"},
+            {"id": "english_intermediate", "title": "Intermediate", "description": "Conversational English"},
+            {"id": "english_advanced", "title": "Advanced", "description": "Fluent or near-fluent"},
+        ]
+    )
+
+def transportation_buttons(user_id):
+    return create_buttoned_message(
+        user_id=user_id,
+        text="How do you usually get around?",
+        buttons=[
+            {"id": "transport_car", "title": "I have a car"},
+            {"id": "transport_transit", "title": "Public transit"},
+            {"id": "transport_limited", "title": "Limited transport"},
+        ]
+    )
+
+def availability_buttons(user_id):
+    return create_buttoned_message(
+        user_id=user_id,
+        text="Are you looking for full-time, part-time, or either?",
+        buttons=[
+            {"id": "availability_fulltime", "title": "Full-time"},
+            {"id": "availability_parttime", "title": "Part-time"},
+            {"id": "availability_either", "title": "Either"},
+        ]
+    )
+
+def resume_buttons(user_id):
+    return create_buttoned_message(
+        user_id=user_id,
+        text="Do you already have a resume?",
+        buttons=[
+            {"id": "resume_yes", "title": "Yes, I have one"},
+            {"id": "resume_no", "title": "No, need help"},
+        ]
+    )
+
+def training_buttons(user_id):
+    return create_buttoned_message(
+        user_id=user_id,
+        text="Would job training or skill-building be useful for you?",
+        buttons=[
+            {"id": "training_yes", "title": "Yes"},
+            {"id": "training_no", "title": "No"},
+        ]
+    )
+
+# ----------------------------
+# Ask next question (strict order)
+# ----------------------------
+async def _ask_next(session, user_id, profile):
+    if not profile.get("job_interests"):
+        q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
+        session["conversation_history"].append({"role": "assistant", "text": q})
+        return create_message(user_id=user_id, text=q)
+
+    if not profile.get("location"):
+        q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
+        session["conversation_history"].append({"role": "assistant", "text": q})
+        return create_message(user_id=user_id, text=q)
+
+    if profile.get("work_experience") is None:
+        q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
+        session["conversation_history"].append({"role": "assistant", "text": q})
+        return create_message(user_id=user_id, text=q)
+
+    if profile.get("transportation_access") is None:
+        session["conversation_history"].append({"role": "assistant", "text": "[Sent transportation options]"})
+        return transportation_buttons(user_id)
+
+    if profile.get("availability") is None:
+        session["conversation_history"].append({"role": "assistant", "text": "[Sent availability options]"})
+        return availability_buttons(user_id)
+
+    if profile.get("has_resume") is None:
+        session["conversation_history"].append({"role": "assistant", "text": "[Sent resume options]"})
+        return resume_buttons(user_id)
+
+    if profile.get("needs_training") is None:
+        session["conversation_history"].append({"role": "assistant", "text": "[Sent training options]"})
+        return training_buttons(user_id)
+
+    # Fallback
+    q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
+    session["conversation_history"].append({"role": "assistant", "text": q})
+    return create_message(user_id=user_id, text=q)
+
+# ----------------------------
+# Main WhatsApp handler
+# ----------------------------
+async def handle_event(event: BaseEvent):
+
+    # --- Interactive button/list responses ---
+    if isinstance(event, InteractiveEvent):
+        user_id = event.user_id
+        session = get_session(user_id)
+
+        interactive_id = getattr(event, "interaction_id", None)
+        print(f"[DEBUG] Resolved interactive_id: {interactive_id}")
+
+        # Profile clarification buttons
+        if interactive_id == "profile_self":
+            session["awaiting_profile_clarification"] = False
+            session["conversation_history"].append({"role": "user", "text": "[Selected: For myself]"})
+            return await _ask_next(session, user_id, active_profile(session))
+
+        if interactive_id == "profile_other":
+            session["awaiting_profile_clarification"] = False
+            session["profiles"].append(new_profile())
+            session["active_profile_index"] = len(session["profiles"]) - 1
+            session["conversation_history"].append({"role": "user", "text": "[Selected: For someone else]"})
+            next_q = "Got it! Let me start a new profile. What kind of work are they looking for, and where are they located?"
+            session["conversation_history"].append({"role": "assistant", "text": next_q})
+            return create_message(user_id=user_id, text=next_q)
+
+        if interactive_id and interactive_id in INTERACTIVE_FIELD_MAP:
+            field, value = INTERACTIVE_FIELD_MAP[interactive_id]
+            session["profiles"][session["active_profile_index"]][field] = value
+            session["conversation_history"].append({
+                "role": "user",
+                "text": f"[Selected: {value}]"
+            })
+            profile = active_profile(session)
+
+            # Onboarding: language selected
+            if session["onboarding_step"] == "language" and field == "preferred_language":
+                session["onboarding_step"] = "comfort"
+                session["conversation_history"].append({"role": "assistant", "text": "[Sent English level options]"})
+                return english_level_list(user_id)
+
+            # Onboarding: comfort level selected
+            if session["onboarding_step"] == "comfort" and field == "english_level":
+                session["onboarding_step"] = "done"
+                next_q = "Great, thanks! Now tell me a little about yourself — what kind of work are you looking for, and where are you located?"
+                session["conversation_history"].append({"role": "assistant", "text": next_q})
+                return create_message(user_id=user_id, text=next_q)
+
+            # Normal flow
+            if enough_info(profile):
+                rec = build_recommendation_with_rag(profile, user_id)
+                session["conversation_history"].append({"role": "assistant", "text": rec})
+                return create_message(user_id=user_id, text=rec)
+
+            return await _ask_next(session, user_id, profile)
+
+        return create_message(
+            user_id=user_id,
+            text="Sorry, I didn't understand that selection. Could you type your answer instead?"
+        )
+
+    # --- Text messages ---
+    if not isinstance(event, TextEvent):
+        return None
+
+    user_id = event.user_id
+    user_message = event.text.strip()
+    session = get_session(user_id)
+
+    # First message — greeting
+    if not session["greeted"]:
+        session["greeted"] = True
+        session["conversation_history"].append({"role": "assistant", "text": INTRO_MESSAGE})
+        return create_message(user_id=user_id, text=INTRO_MESSAGE)
+
+    # Onboarding: language step
+    if session["onboarding_step"] == "language":
+        if "english" in user_message.lower():
+            session["profiles"][0]["preferred_language"] = "English"
+            session["conversation_history"].append({"role": "user", "text": user_message})
+            session["onboarding_step"] = "comfort"
+            session["conversation_history"].append({"role": "assistant", "text": "[Sent English level options]"})
+            return english_level_list(user_id)
+        elif "arabic" in user_message.lower():
+            session["profiles"][0]["preferred_language"] = "Arabic"
+            session["conversation_history"].append({"role": "user", "text": user_message})
+            session["onboarding_step"] = "comfort"
+            session["conversation_history"].append({"role": "assistant", "text": "[Sent English level options]"})
+            return english_level_list(user_id)
+        else:
+            session["conversation_history"].append({"role": "assistant", "text": "[Sent language options]"})
+            return language_buttons(user_id)
+
+    # Onboarding: comfort step
+    if session["onboarding_step"] == "comfort":
+        for level in ["beginner", "intermediate", "advanced"]:
+            if level in user_message.lower():
+                session["profiles"][session["active_profile_index"]]["english_level"] = level
+                session["conversation_history"].append({"role": "user", "text": user_message})
+                session["onboarding_step"] = "done"
+                next_q = "Great, thanks! Now tell me a little about yourself — what kind of work are you looking for, and where are you located?"
+                session["conversation_history"].append({"role": "assistant", "text": next_q})
+                return create_message(user_id=user_id, text=next_q)
+        return english_level_list(user_id)
+
+    if not user_message:
+        return create_message(user_id=user_id, text="Please tell me a little more so I can help.")
+
+    # Scope check — only run when profile is complete
+    scope = classify_scope(user_message, user_id, session)
+    if scope == "legal":
+        session["conversation_history"].append({"role": "user", "text": user_message})
+        session["conversation_history"].append({"role": "assistant", "text": LEGAL_RESPONSE})
+        return create_message(user_id=user_id, text=LEGAL_RESPONSE)
+    if scope == "other":
+        session["conversation_history"].append({"role": "user", "text": user_message})
+        session["conversation_history"].append({"role": "assistant", "text": OUT_OF_SCOPE_RESPONSE})
+        return create_message(user_id=user_id, text=OUT_OF_SCOPE_RESPONSE)
+
+    # Third-party check — only after intake is complete
+    if session.get("onboarding_step") == "done" and not session.get("awaiting_profile_clarification"):
+        missing = get_missing_fields(active_profile(session))
+        if not missing:
+            third_party = classify_third_party(user_message, user_id)
+            if third_party == "other":
+                session["awaiting_profile_clarification"] = True
+                clarification = "It sounds like you might be asking about someone else. Are you looking for resources for yourself, or for a friend or family member?"
+                session["conversation_history"].append({"role": "user", "text": user_message})
+                session["conversation_history"].append({"role": "assistant", "text": clarification})
+                return create_buttoned_message(
+                    user_id=user_id,
+                    text=clarification,
+                    buttons=[
+                        {"id": "profile_self", "title": "For myself"},
+                        {"id": "profile_other", "title": "For someone else"},
+                    ]
+                )
+    elif session.get("awaiting_profile_clarification"):
+        session["awaiting_profile_clarification"] = False
+        if any(w in user_message.lower() for w in ["someone else", "friend", "family", "sister", "brother", "spouse", "husband", "wife", "parent"]):
+            session["profiles"].append(new_profile())
+            session["active_profile_index"] = len(session["profiles"]) - 1
+
+    session["conversation_history"].append({"role": "user", "text": user_message})
+
+    # Update profile
+    update_profile_from_history(session, user_id)
+    profile = active_profile(session)
+
+    if enough_info(profile):
+        rec = build_recommendation_with_rag(profile, user_id)
+        session["conversation_history"].append({"role": "assistant", "text": rec})
+        return create_message(user_id=user_id, text=rec)
+
+    return await _ask_next(session, user_id, profile)
 
 
 # ----------------------------
-# Main terminal loop
+# Terminal fallback
 # ----------------------------
 if __name__ == '__main__':
     print("Type EXIT to stop.\n")
     print(INTRO_MESSAGE)
+    session = get_session("terminal_user")
+    session["greeted"] = True
+    session["conversation_history"].append({"role": "assistant", "text": INTRO_MESSAGE})
 
     while True:
         user_message = input("User: ").strip()
-
         if user_message.lower() == "exit":
             break
-
         if not user_message:
             print("\nAssistant: Please tell me a little more so I can help.\n")
             continue
 
-        # Extra safety check for legal/work authorization questions
-        if looks_like_legal_question(user_message):
-            print(
-                "\nAssistant: I can share general employment resources, but I can’t give legal advice about immigration status, visas, or work authorization. "
-                "For trusted help, it may be best to contact a qualified immigration attorney or a local organization such as the International Institute of New England.\n"
-            )
+        scope = classify_scope(user_message, "terminal_user", session)
+        if scope == "legal":
+            print(f"\nAssistant: {LEGAL_RESPONSE}\n")
+            continue
+        if scope == "other":
+            print(f"\nAssistant: {OUT_OF_SCOPE_RESPONSE}\n")
             continue
 
-        # Update profile from latest message
-        profile_builder = client.generate(
-            model=MODEL_NAME,
-            system=PROFILE_BUILDER_PROMPT,
-            query=(
-                "Update the user profile based on the current profile, the assistant's last question, and the latest user message.\n\n"
-                f"CURRENT_PROFILE_JSON:\n{json.dumps(profile, ensure_ascii=False)}\n\n"
-                f"LAST_ASKED_FIELD:\n{current_question_field}\n\n"
-                f"LAST_ASSISTANT_QUESTION:\n{last_question_text}\n\n"
-                f"LATEST_USER_MESSAGE:\n{user_message}\n\n"
-                "Return only the full updated JSON object."
-            ),
-            temperature=TEMPERATURE,
-            lastk=LAST_K,
-            session_id=SESSION_ID,
-            rag_usage=False
-        )
+        session["conversation_history"].append({"role": "user", "text": user_message})
+        update_profile_from_history(session, "terminal_user")
+        profile = active_profile(session)
 
-        parsed = safe_json_load(profile_builder["result"])
-
-        if parsed is None:
-            print("\n[Warning] Could not parse model output as JSON. Keeping previous profile.")
-            print("Raw model output:")
-            print(profile_builder["result"])
-        else:
-            profile = merge_profile(profile, parsed)
-
-        # print_profile(profile)
-
-        # If enough information is collected, move to RAG recommendation step
         if enough_info(profile):
-            recommendation_text = build_recommendation_with_rag(profile)
-            print("\nAssistant:", recommendation_text, "\n")
+            rec = build_recommendation_with_rag(profile, "terminal_user")
+            print(f"\nAssistant: {rec}\n")
             continue
 
-        # Ask next intake question
-        next_field, next_question = get_next_question(profile, asked_fields)
-
-        if next_field is None or next_question is None:
-            recommendation_text = build_recommendation_with_rag(profile)
-            print("\nAssistant:", recommendation_text, "\n")
-            continue
-
-        current_question_field = next_field
-        last_question_text = next_question
-
-        if next_field not in asked_fields:
-            asked_fields.append(next_field)
-
+        next_question = get_next_question_from_llm(profile, session["conversation_history"], "terminal_user")
+        session["conversation_history"].append({"role": "assistant", "text": next_question})
         print(f"\nAssistant: {next_question}\n")
