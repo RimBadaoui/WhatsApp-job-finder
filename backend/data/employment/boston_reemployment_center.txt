@@ -1,20 +1,101 @@
-Program: Boston Re-Employment Center
+Boston Re-Employment Center (REC)
 
-The Boston Re-Employment Center helps residents find jobs and career training.
+Source:
+https://www.mass.gov/info-details/the-boston-re-employment-center-rec
 
-Services include:
-- job placement support
-- career coaching
-- resume workshops
-- workforce training programs
-- access to local job listings
+----------------------------------------
+OVERVIEW
+----------------------------------------
+The Boston Re-Employment Center (REC) provides in-person and appointment-based services to help individuals with unemployment insurance and job search assistance.
 
-Location:
-1010 Harrison Avenue
-Boston, Massachusetts
+It is operated by the Massachusetts Department of Unemployment Assistance (DUA) and supports individuals who are unemployed or receiving unemployment benefits.
 
-Eligibility:
-Open to Boston residents looking for employment.
+Services are available by appointment only.
 
-Website:
-https://www.boston.gov
+----------------------------------------
+KEY USER ACTIONS (IMPORTANT)
+----------------------------------------
+
+Schedule an Appointment (REQUIRED):
+https://www.mass.gov/info-details/make-an-appointment-with-dua
+
+- Must book an appointment before visiting
+- Available Monday – Friday
+- Services typically offered 8:30 AM – 4:30 PM
+
+----------------------------------------
+CORE SERVICES
+----------------------------------------
+
+Unemployment Insurance Help:
+- Assistance filing unemployment claims
+- Help resolving claim issues or delays
+- Support with identity verification and documentation
+- Guidance on eligibility and benefits
+
+Job Search Assistance:
+- Resume support
+- Job search guidance
+- Referrals to employment programs and services
+
+Reemployment Support:
+- Helps individuals return to work faster
+- May connect users to career services and training programs
+
+----------------------------------------
+PROGRAM CONNECTIONS
+----------------------------------------
+
+RESEA Program (Reemployment Services and Eligibility Assessment):
+https://www.mass.gov/info-details/reemployment-services-and-eligibility-assessment-resea
+
+- Required for some unemployment recipients
+- Provides structured job search support
+- Helps ensure continued eligibility for benefits
+
+----------------------------------------
+LOCATION
+----------------------------------------
+
+Boston Re-Employment Center (REC)
+2 Avenue de Lafayette
+Boston, MA 02111
+
+----------------------------------------
+WHO THIS HELPS
+----------------------------------------
+
+- Individuals receiving unemployment benefits
+- Recently unemployed workers
+- People having issues with unemployment claims
+- Job seekers needing assistance navigating unemployment services
+
+----------------------------------------
+WHAT TO EXPECT
+----------------------------------------
+
+- Appointment-based services (no walk-ins)
+- Staff assistance with both unemployment and job search
+- Possible referrals to career centers (MassHire, Goodwill, etc.)
+- Structured support if enrolled in RESEA program
+
+----------------------------------------
+COMMON USER QUESTIONS (RAG TARGETS)
+----------------------------------------
+
+- Where can I get help with unemployment in Boston?
+- How do I fix my unemployment claim?
+- Do I need an appointment for the REC?
+- What is the Boston Re-Employment Center?
+- Where is the unemployment office in Boston?
+
+----------------------------------------
+KEYWORDS FOR RETRIEVAL
+----------------------------------------
+
+Boston unemployment help
+DUA Boston office
+REC Boston appointment
+fix unemployment claim Massachusetts
+RESEA program Massachusetts
+unemployment office Boston

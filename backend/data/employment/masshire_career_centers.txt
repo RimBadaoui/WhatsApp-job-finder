@@ -1,20 +1,181 @@
-Program: MassHire Career Centers
+MassHire Downtown Boston Career Center
+Source:
+https://masshiredowntownboston.org/
 
-MassHire Career Centers provide free employment services to job seekers in Massachusetts.
+----------------------------------------
+OVERVIEW
+----------------------------------------
+MassHire Downtown Boston Career Center provides FREE career services to job seekers, including coaching, job search support, training programs, and connections to employers.
 
-Services include:
-- job search assistance
-- resume and cover letter help
-- interview preparation
-- career counseling
-- job training opportunities
-- job fairs and hiring events
+It is part of the statewide MassHire workforce system, designed to connect job seekers with employment opportunities and help businesses find qualified workers.
 
-Locations:
-MassHire Career Centers operate throughout Massachusetts including Boston.
+----------------------------------------
+KEY USER ACTIONS (IMPORTANT)
+----------------------------------------
 
-How to get help:
-Job seekers can visit a MassHire Career Center in person or access services online.
+Get Started / Become a Member:
+https://masshiredowntownboston.org/job-seekers/
 
-Website:
-https://www.masshiremass.gov
+- Create a MyMassGov account
+- Register as a MassHire member
+- Gain access to all services, events, and programs
+
+Membership Form:
+https://masshiredowntownboston.org/become-a-member/
+
+- Required for full access to services
+- May require Job Seeker ID
+
+----------------------------------------
+CORE SERVICES
+----------------------------------------
+
+1:1 Career Coaching:
+- Personalized career guidance
+- Resume and cover letter help
+- LinkedIn profile optimization
+- Interview preparation and negotiation strategies
+
+Job Search Assistance:
+- Help with job applications
+- Resume review and improvement
+- Job search strategies and tools
+- Access to employer networks and hiring events
+
+Workshops & Webinars:
+- Resume workshops
+- Interview training
+- LinkedIn optimization
+- Career change guidance
+- Hiring process insights
+
+Job Fairs & Hiring Events:
+https://masshiredowntownboston.org/job-fairs/
+
+- Connect directly with employers
+- Virtual and in-person job fairs available
+
+----------------------------------------
+TRAINING & PROGRAMS
+----------------------------------------
+
+Job Training Programs:
+- Vocational training opportunities (e.g., carpentry, HVAC)
+- Skills development programs
+
+Training Grants:
+- WIOA (Workforce Innovation and Opportunity Act)
+- Training Opportunities Program (TOP)
+- May include funding and extended unemployment benefits
+
+RESEA Program:
+- Reemployment Services and Eligibility Assessment
+- Helps unemployment recipients return to work faster
+
+----------------------------------------
+SPECIAL SUPPORT SERVICES
+----------------------------------------
+
+Recently Unemployed:
+- Resume and interview help
+- Job search strategy coaching
+- Connections to job fairs and employer networks
+
+Career Changers:
+- Guidance for switching careers
+- Training and skill-building programs
+
+Young Adults (18–24):
+https://masshiredowntownboston.org/young-adults/
+
+- Career coaching
+- Training programs
+- Financial assistance tools
+- Entry-level career pathways
+
+Veterans:
+- Priority service for veterans and eligible spouses
+
+----------------------------------------
+FINANCIAL & SUPPORT SERVICES
+----------------------------------------
+
+Financial Opportunity Center:
+- 1:1 financial coaching
+- Budgeting and financial planning
+- Free tax preparation services
+
+SNAP Assistance:
+- Help applying for food benefits
+
+Financial Education:
+- Investing basics
+- Insurance guidance
+- Long-term financial planning
+
+----------------------------------------
+ADDITIONAL RESOURCES
+----------------------------------------
+
+Featured Jobs:
+https://masshiredowntownboston.org/job-seekers/featured-job-postings/
+
+Events Calendar:
+https://masshiredowntownboston.org/events/
+
+- Includes resume workshops, interview sessions, LinkedIn training, and career development events
+
+----------------------------------------
+IN-PERSON SERVICES
+----------------------------------------
+
+Career Resource Center:
+- Free access to computers, Wi-Fi, printers, and scanners
+- Microsoft Office training and staff support
+
+----------------------------------------
+LOCATION & CONTACT
+----------------------------------------
+
+MassHire Downtown Boston Career Center
+75 Federal Street, 3rd Floor
+Boston, MA 02110
+
+Phone:
+617-399-3100
+
+Hours:
+Monday – Friday (approx. 9 AM – 4–5 PM)
+
+----------------------------------------
+TRANSPORTATION (MBTA)
+----------------------------------------
+
+- Red Line: Downtown Crossing
+- Orange Line: Back Bay
+- Green Line: Boylston
+- Commuter Rail: South Station
+
+Walking access from all major transit lines
+
+----------------------------------------
+COMMON USER QUESTIONS (RAG TARGETS)
+----------------------------------------
+
+- Where can I get free job help in Boston?
+- How do I get career coaching near me?
+- Are there job training programs in Boston?
+- How do I find job fairs near me?
+- What is MassHire and how do I sign up?
+
+----------------------------------------
+KEYWORDS FOR RETRIEVAL
+----------------------------------------
+
+MassHire Boston
+job help Boston free
+career coaching Boston
+job training programs Boston
+job fairs Boston
+resume help Boston
+unemployment job support Massachusetts

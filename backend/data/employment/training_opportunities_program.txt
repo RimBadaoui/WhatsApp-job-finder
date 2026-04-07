@@ -1,0 +1,133 @@
+Training Opportunities Program (TOP)
+
+Source:
+https://www.mass.gov/info-details/training-opportunities-program-top
+
+----------------------------------------
+OVERVIEW
+----------------------------------------
+The Training Opportunities Program (TOP) allows individuals receiving unemployment benefits in Massachusetts to attend approved full-time training programs while continuing to receive those benefits.
+
+The goal of TOP is to help job seekers gain new skills and improve their chances of finding employment in high-demand fields.
+
+----------------------------------------
+KEY BENEFIT (IMPORTANT)
+----------------------------------------
+
+Continue Unemployment Benefits While Training:
+- Participants can collect unemployment insurance (UI) while enrolled in approved full-time training programs
+- Removes the requirement to actively search for work while in training (if approved)
+
+----------------------------------------
+KEY USER ACTIONS
+----------------------------------------
+
+Learn About Program:
+https://www.mass.gov/info-details/training-opportunities-program-top
+
+Apply for TOP:
+https://www.mass.gov/how-to/apply-for-the-training-opportunities-program-top
+
+- Must apply after enrolling in an approved training program
+- Must be receiving unemployment benefits
+- Application must be approved by DUA
+
+----------------------------------------
+ELIGIBILITY REQUIREMENTS
+----------------------------------------
+
+To qualify for TOP:
+- Must be receiving unemployment insurance (UI)
+- Must be enrolled in a full-time training program
+- Training must be approved by the Department of Unemployment Assistance (DUA)
+- Training must improve employment opportunities
+
+----------------------------------------
+TRAINING REQUIREMENTS
+----------------------------------------
+
+Training must be:
+- Full-time (typically 20+ hours per week of instruction)
+- From an approved training provider
+- Focused on improving job prospects
+
+Examples:
+- Certificate programs
+- Degree programs
+- Vocational or technical training
+
+----------------------------------------
+PROGRAM BENEFITS
+----------------------------------------
+
+- Continue receiving unemployment payments during training
+- Gain new skills for better job opportunities
+- Access to approved training programs in high-demand industries
+
+----------------------------------------
+HOW TO APPLY (STEP-BY-STEP)
+----------------------------------------
+
+1. Choose a training program
+   - Must meet full-time requirements
+   - Must be approved or approvable by DUA
+
+2. Enroll in the training program
+
+3. Apply for TOP:
+   https://www.mass.gov/how-to/apply-for-the-training-opportunities-program-top
+
+4. Submit required documentation
+   - Training details
+   - Enrollment verification
+
+5. Wait for approval from DUA
+
+----------------------------------------
+IMPORTANT NOTES
+----------------------------------------
+
+- Apply as early as possible after enrolling in training
+- Not all training programs are automatically approved
+- Approval is required before benefits can continue under TOP
+
+----------------------------------------
+RELATED PROGRAMS
+----------------------------------------
+
+MassHire Career Centers:
+- Help find approved training programs
+- Provide guidance on eligibility and application
+
+RESEA Program:
+- May connect individuals to training opportunities
+
+----------------------------------------
+WHO THIS HELPS
+----------------------------------------
+
+- Unemployed individuals looking to gain new skills
+- Career changers
+- Workers whose industries are declining
+- Individuals needing certification or training to re-enter the workforce
+
+----------------------------------------
+COMMON USER QUESTIONS (RAG TARGETS)
+----------------------------------------
+
+- Can I go to school while on unemployment in Massachusetts?
+- How do I get unemployment while in training?
+- What is the TOP program?
+- How do I apply for training while unemployed?
+- Does unemployment pay for school?
+
+----------------------------------------
+KEYWORDS FOR RETRIEVAL
+----------------------------------------
+
+TOP Massachusetts
+training while on unemployment
+Section 30 Massachusetts
+job training unemployment benefits
+Massachusetts training program unemployment
+career training while unemployed

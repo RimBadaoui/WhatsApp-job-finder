@@ -1,0 +1,196 @@
+Boston Public Library (BPL) - Job & Career Success
+
+Source:
+https://www.bpl.org/job-career-success/
+
+----------------------------------------
+OVERVIEW
+----------------------------------------
+The Boston Public Library (BPL) offers free job and career services to help individuals find employment, improve skills, and prepare for career advancement.
+
+Services include:
+- One-on-one job assistance
+- Resume and cover letter help
+- Interview preparation
+- Career development events
+- Online learning resources
+
+The BPL acts as a one-stop resource for job seekers and provides both in-person and online support.
+
+----------------------------------------
+KEY USER ACTION (IMPORTANT)
+----------------------------------------
+
+Job Help Intake Form (START HERE):
+https://forms.office.com/pages/responsepage.aspx?id=cVxz-pXXAUywrgn6dBWysdywlQ2VNGVEqH_VVbeRpWdUN1VON1YwNjBNNUdFR1hQTUVXWTdNNE5VVS4u&route=shorturl
+
+- Required to request job assistance
+- Used to schedule one-on-one help
+- Connects users with a career advisor
+
+----------------------------------------
+CORE SERVICES
+----------------------------------------
+
+One-on-One Job Help:
+- Resume review
+- Cover letter assistance
+- Interview coaching
+- Job search guidance
+
+Workshops & Events:
+- Resume writing workshops
+- Career development sessions
+- Interview preparation workshops
+- Technology and AI-related job readiness sessions
+
+Career Development Support:
+- Personalized mentoring through the job search process
+- Access to job search strategies and guidance
+
+----------------------------------------
+JOB SEARCH RESOURCES
+----------------------------------------
+
+Job Seekers' Guide:
+https://guides.bpl.org/jobsearch
+
+Includes:
+- Resume writing tips
+- Cover letter guidance
+- Interview preparation strategies
+- Career exploration advice
+- Job search techniques
+
+Job & Career Booklists:
+- Books and eBooks on resumes, interviews, and career development
+
+----------------------------------------
+ONLINE TOOLS & DATABASES
+----------------------------------------
+
+AtoZdatabases:
+- Database with 30 million business profiles and 240 million residents
+- Useful for job searching, networking, and company research
+
+Vault Career Guides:
+- Industry-specific career and employer guides
+- Resume and interview preparation resources
+
+LearningExpress Library:
+- Test prep and career certification resources
+- Includes Job & Career Accelerator
+
+LinkedIn Learning (via BPL):
+- 16,000+ courses in business, technology, and creative skills
+
+O'Reilly Learning Platform:
+- Books, videos, and certifications in tech, business, and IT skills
+
+----------------------------------------
+SKILLS TRAINING & EDUCATION
+----------------------------------------
+
+Google Career Certificates:
+- Data analytics
+- IT support
+- Project management
+- UX design
+- Digital marketing
+
+SkillMill Training:
+- Skilled trades training (HVAC, electrical, plumbing)
+- Certification prep (OSHA, EPA, etc.)
+
+Test Preparation:
+- CDL, nursing, real estate, and other professional exams
+
+Language & ESL Support:
+- English language learning programs
+- Workforce readiness classes
+
+----------------------------------------
+JOB SEARCH STRATEGIES (FROM BPL GUIDE)
+----------------------------------------
+
+- Notify your network when job searching
+- Update your resume and LinkedIn profile
+- Join professional organizations
+- Create a dedicated professional email
+- Attend networking events and workshops
+- Identify transferable skills when changing careers
+
+----------------------------------------
+LOCAL JOB RESOURCES (BOSTON)
+----------------------------------------
+
+City of Boston Jobs:
+https://www.boston.gov/career-center
+
+MassHire JobQuest:
+- Statewide job search system
+
+JVS Boston:
+- Career training and job placement support
+
+Massachusetts Nonprofit Network:
+- Nonprofit job listings
+
+HireCulture:
+- Arts and culture job listings in Massachusetts
+
+USAJobs:
+https://www.usajobs.gov/
+- Federal job opportunities
+
+----------------------------------------
+ADDITIONAL SUPPORT
+----------------------------------------
+
+- Resume and interview drop-in sessions at library branches
+- Career coaching at multiple BPL locations
+- Technology and computer skills training
+- Business and entrepreneurship resources
+
+----------------------------------------
+WHO THIS HELPS
+----------------------------------------
+
+- Unemployed individuals
+- Career changers
+- Students and recent graduates
+- People re-entering the workforce
+- Individuals needing skill development
+
+----------------------------------------
+CONTACT / ACCESS
+----------------------------------------
+
+Main Website:
+https://www.bpl.org/job-career-success/
+
+General Contact:
+Email: ask@bpl.org
+
+Visit any Boston Public Library branch for in-person support.
+
+----------------------------------------
+COMMON USER QUESTIONS (RAG TARGETS)
+----------------------------------------
+
+- Where can I get free job help in Boston?
+- How do I get help with my resume?
+- Does the library offer job assistance?
+- Where can I practice interviews?
+- How do I sign up for job help at BPL?
+
+----------------------------------------
+KEYWORDS FOR RETRIEVAL
+----------------------------------------
+
+Boston job help
+free resume help Boston
+career assistance Boston library
+job training Boston
+BPL job help
+career coaching Boston

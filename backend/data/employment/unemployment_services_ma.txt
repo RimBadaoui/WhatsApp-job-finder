@@ -1,14 +1,90 @@
-Program: Massachusetts Department of Unemployment Assistance (DUA)
+Massachusetts Department of Unemployment Assistance (DUA)
 
-The Massachusetts Department of Unemployment Assistance provides support for individuals who have lost their jobs.
-
-Services include:
-- unemployment benefits
-- job search programs
-- re-employment assistance
-- workforce training resources
-
-Job seekers can apply online or visit a MassHire Career Center.
-
-Website:
+Source:
 https://www.mass.gov/orgs/department-of-unemployment-assistance
+
+----------------------------------------
+OVERVIEW
+----------------------------------------
+The Massachusetts Department of Unemployment Assistance (DUA) provides temporary income (unemployment insurance) to eligible workers who have lost their jobs or had their hours reduced.
+
+The goal is to support individuals financially while they actively search for new employment.
+
+----------------------------------------
+KEY USER ACTIONS
+----------------------------------------
+
+Apply for Unemployment Benefits:
+https://www.mass.gov/how-to/apply-for-unemployment-insurance-benefits
+- Create a MyMassGov account
+- Submit an unemployment claim online
+- Provide employment history and identity verification
+
+Login to Unemployment Account:
+https://www.mass.gov/how-to/log-in-to-unemployment-services-for-workers
+
+File Weekly Claim (REQUIRED to get paid):
+https://www.mass.gov/how-to/file-your-weekly-unemployment-claim
+- Must be done every week
+- Report job search activity
+- Report any income earned
+
+----------------------------------------
+ELIGIBILITY REQUIREMENTS
+----------------------------------------
+- Must have lost job or had hours reduced through no fault of your own
+- Must be able to work
+- Must be available for work
+- Must be actively searching for a job
+- Must meet wage and work history requirements
+
+----------------------------------------
+BENEFITS INFORMATION
+----------------------------------------
+- Weekly financial payments based on prior earnings
+- Duration depends on eligibility and state rules
+- Direct deposit or debit card payment options
+
+----------------------------------------
+ADDITIONAL SERVICES
+----------------------------------------
+- Job search assistance programs
+- Career training opportunities
+- Workforce development resources
+- Reemployment services
+
+Main Resource Hub:
+https://www.mass.gov/topics/unemployment
+
+----------------------------------------
+CONTACT INFORMATION
+----------------------------------------
+Department of Unemployment Assistance (DUA)
+
+Phone:
+(877) 626-6800
+
+Hours:
+Monday – Thursday: 8:30 AM – 4:30 PM
+
+Support:
+- Multilingual assistance available
+- Online support through Mass.gov portal
+
+----------------------------------------
+COMMON USER QUESTIONS (RAG TARGETS)
+----------------------------------------
+- How do I apply for unemployment in Massachusetts?
+- How do I file a weekly unemployment claim?
+- Why did I not get paid unemployment this week?
+- What are the requirements for unemployment benefits?
+- How do I contact DUA?
+
+----------------------------------------
+KEYWORDS FOR RETRIEVAL
+----------------------------------------
+unemployment Massachusetts
+apply unemployment MA
+file weekly claim MA
+lost job help Massachusetts
+DUA benefits Massachusetts
