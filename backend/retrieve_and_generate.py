@@ -167,13 +167,14 @@ async def handle_event(event: BaseEvent):
     query_with_rag_context = f"{query}\n{rag_context_string_simple(rag_context)}"
 
     response = client.generate(
-        model='4o-mini',
+        model='gemini-2.5-flash-lite',
         system="Answer questions in a brief and concise manner",
         query=query_with_rag_context,
         temperature=0.0,
         lastk=1,
         session_id='andrew_session',
-        rag_usage=False  # we're handling RAG manually via retrieve()
+        rag_usage=False,  # we're handling RAG manually via retrieve()
+        websearch=True
     )
 
     return create_message(user_id=event.user_id, text=response['result'])

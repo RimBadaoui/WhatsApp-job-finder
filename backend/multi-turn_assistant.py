@@ -1,13 +1,15 @@
 from llmproxy import LLMProxy
 from wa_service_sdk import BaseEvent, TextEvent, InteractiveEvent, create_message, create_buttoned_message, create_list_message
 import json
+import re
+import requests
 
 # ----------------------------
 # LLM setup
 # ----------------------------
 client = LLMProxy()
 
-MODEL_NAME = "4o-mini"
+MODEL_NAME = "gemini-2.5-flash-lite"
 TEMPERATURE = 0.0
 LAST_K = 10
 
@@ -24,7 +26,7 @@ I can help you find:
 
 I only help with employment-related questions. For legal advice about visas or immigration status, please contact a qualified attorney.
 
-To get started — what language do you prefer?"""
+What can I help you with today?"""
 
 OUT_OF_SCOPE_RESPONSE = "I'm only able to help with employment and job-related questions. For anything else, I'd recommend reaching out to a relevant local organization. Is there anything job-related I can help you with?"
 
@@ -66,7 +68,7 @@ def get_session(user_id):
             "active_profile_index": 0,
             "conversation_history": [],
             "greeted": False,
-            "onboarding_step": "language",  # language -> comfort -> done
+            "onboarding_step": "done",  # language/comfort steps disabled for now
             "awaiting_profile_clarification": False,
         }
     return user_sessions[user_id]
@@ -182,21 +184,23 @@ Schema:
 NEXT_QUESTION_PROMPT = '''
 You are a warm, conversational employment support assistant helping immigrants in Greater Boston.
 
-You are in the middle of an intake conversation. Your job is to ask the single most natural next question to fill in missing profile information, based on the conversation so far.
+You are in the middle of an intake conversation. Your job is to:
+1. First, briefly acknowledge or react to what the user just said (1 sentence max — warm and natural, not generic).
+2. Then ask ONE question about the FIRST missing field listed below.
 
-Missing fields still needed:
+Missing fields still needed (ask about the FIRST one only):
 {missing_fields}
 
 Rules:
-- Ask only ONE question at a time.
-- Make it feel natural and conversational, not like a form.
-- If the user introduced themselves with a lot of info, acknowledge it warmly first.
-- Build on what the user already said when possible.
+- ALWAYS start with a brief, specific acknowledgment of the user's last message before asking the next question.
+- Ask ONLY about the first field in the list above. Do not ask about any other topic.
+- NEVER ask about availability, full-time vs part-time, transportation, resume, or training — those are handled separately with buttons.
+- Build on what the user already said when possible — reference their specific words.
 - Do not repeat questions already answered.
 - Do not ask about sensitive legal or immigration status.
-- Keep it short and friendly.
+- Keep it short and friendly — 2-3 sentences total.
 
-Return only the question text, nothing else.
+Return only the response text, nothing else.
 '''
 
 RECOMMENDATION_PROMPT = '''
@@ -210,24 +214,75 @@ Rules:
 5. Keep responses simple, clear, supportive, and easy to understand.
 6. Stay focused on employment support only.
 7. Do not guarantee outcomes or make promises.
+8. You MUST include the full URL (e.g. https://www.example.org) for every resource you mention. Get URLs from the retrieved documents or web search. Never omit a URL — if you cannot find one, do not include that resource.
+
+Personalization rules — you MUST apply ALL of these:
+- If the user has a name, address them by name in the opening line.
+- Mention their specific job interest (e.g. "nursing", "construction") by name — do not say "your field" generically.
+- If they want training, recommend training programs specifically for their job interest.
+- If they have limited English, prioritize bilingual or multilingual programs and mention that explicitly.
+- If they have limited transportation, only recommend organizations accessible by public transit or remote options.
+- If they need a resume, include a specific resume help resource.
+- If they are looking for part-time work, say so and filter recommendations accordingly.
+- Mention their location (e.g. "in East Boston" or "near Chelsea") when referencing nearby resources.
 
 Your response should:
-1. Address the user by name if known.
-2. Briefly acknowledge their situation.
-3. Recommend 2-4 relevant resources or organizations with explanations.
-4. Give a short "next steps" section.
-5. Include a disclaimer that this is general information, not legal advice, if relevant.
+1. Open with a warm, personalized sentence using their name and specific situation.
+2. Recommend 2-4 resources that directly match their job interest, location, and constraints. Format EACH resource exactly like this:
+   *Resource Name* (https://full-url-here.org): One sentence explaining why it fits this person specifically.
+3. Give 2-3 concrete next steps tailored to their profile.
+4. Close with an encouraging line.
+5. Include a brief disclaimer if legal topics arose.
 
-Tailor to: English level, training needs, resume status, transportation constraints.
+IMPORTANT: Every resource MUST include its full website URL in parentheses. Use web search to find the correct URL for each organization. If you cannot find a verified URL for a resource, do not include that resource.
+
 Do not output JSON.
 '''
 
 # ----------------------------
 # Helpers
 # ----------------------------
-def safe_json_load(text: str):
+def _is_dead_url(url: str) -> bool:
+    """Return True if the URL is unreachable, returns an error, or soft-redirects to the homepage."""
     try:
-        return json.loads(text)
+        resp = requests.get(url, allow_redirects=True, timeout=5,
+                            headers={"User-Agent": "Mozilla/5.0"})
+        if resp.status_code >= 400:
+            return True
+        # Soft-404 detection: if we were redirected away to just the root domain, the page doesn't exist
+        from urllib.parse import urlparse
+        requested = urlparse(url)
+        final = urlparse(resp.url)
+        requested_has_path = requested.path.strip("/") != ""
+        final_is_root = final.path.strip("/") == ""
+        if requested_has_path and final_is_root and requested.netloc == final.netloc:
+            return True
+        return False
+    except requests.RequestException:
+        return True
+
+def remove_dead_links(text: str) -> str:
+    """Find all URLs in text, verify each one, and remove any that are dead or soft-404."""
+    urls = re.findall(r'https?://[^\s\)\]"\']+', text)
+    for url in set(urls):
+        if _is_dead_url(url):
+            text = text.replace(url, "")
+    # Clean up empty parentheses left behind, e.g. "Name ()" or "Name ( )"
+    text = re.sub(r'\(\s*\)', '', text)
+    return text.strip()
+
+def safe_json_load(text: str):
+    # Strip markdown code fences if present (e.g. ```json ... ```)
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        # Remove first and last fence lines
+        inner = lines[1:] if lines[0].startswith("```") else lines
+        if inner and inner[-1].strip() == "```":
+            inner = inner[:-1]
+        stripped = "\n".join(inner)
+    try:
+        return json.loads(stripped)
     except json.JSONDecodeError:
         return None
 
@@ -258,6 +313,18 @@ def get_missing_fields(profile_dict):
     if profile_dict.get("needs_training") is None:
         missing.append("whether they want job training or skill-building")
     return missing
+
+# Fields handled by interactive buttons — the LLM should not ask about these as free text
+BUTTON_HANDLED_FIELDS = {
+    "transportation access (car, public transit, limited)",
+    "availability (full-time, part-time, either)",
+    "whether they have a resume or need help making one",
+    "whether they want job training or skill-building",
+}
+
+def get_llm_askable_fields(profile_dict):
+    """Return only fields the LLM should ask about as free text (not handled by buttons)."""
+    return [f for f in get_missing_fields(profile_dict) if f not in BUTTON_HANDLED_FIELDS]
 
 def enough_info(profile_dict):
     return len(get_missing_fields(profile_dict)) == 0
@@ -296,7 +363,8 @@ def classify_scope(user_message: str, user_id: str, session: dict) -> str:
         temperature=0.0,
         lastk=1,
         session_id=f"{user_id}_scope",
-        rag_usage=False
+        rag_usage=False,
+        websearch=True
     )
     return result["result"].strip().lower()
 
@@ -308,7 +376,8 @@ def classify_third_party(user_message: str, user_id: str) -> str:
         temperature=0.0,
         lastk=1,
         session_id=f"{user_id}_thirdparty",
-        rag_usage=False
+        rag_usage=False,
+        websearch=True
     )
     return result["result"].strip().lower()
 
@@ -318,21 +387,29 @@ def build_recommendation_with_rag(profile_dict, user_id):
         model=MODEL_NAME,
         system=RECOMMENDATION_PROMPT,
         query=(
-            "Use the retrieved documents and the user profile below to recommend relevant "
-            "employment resources in Greater Boston.\n\n"
+            "Use the retrieved documents and web search to write a personalized recommendation for this user.\n\n"
             f"USER PROFILE:\n{profile_summary}\n\n"
-            "Focus on programs, organizations, job resources, training opportunities, and next steps.\n"
-            "If the retrieved context does not support a recommendation, do not make it up.\n"
+            "You MUST reference their specific job interest, location, availability, English level, "
+            "transportation access, resume status, and training needs in your response. "
+            "Do not write a generic response — every recommendation must explain why it fits this specific person.\n"
+            "IMPORTANT: For every organization you recommend, include its URL in parentheses next to the resource name. "
+            "Always use the URL that appears in the retrieved documents first — do not replace or override it with a web search result. "
+            "Only use web search to find a URL if the retrieved documents do not provide one for that organization.\n"
         ),
         temperature=TEMPERATURE,
         lastk=LAST_K,
-        session_id=user_id,
-        rag_usage=True
+        session_id="rag",
+        rag_usage=True,
+        websearch=True
     )
-    return recommendation["result"]
+
+    print("[DEBUG] Full RAG response keys:", recommendation.keys())
+    print("[DEBUG] Full RAG response:", json.dumps(recommendation, indent=2, ensure_ascii=False))
+    result = remove_dead_links(recommendation["result"])
+    return result
 
 def get_next_question_from_llm(profile_dict, conversation_history, user_id):
-    missing = get_missing_fields(profile_dict)
+    missing = get_llm_askable_fields(profile_dict)
     missing_str = "\n".join(f"- {f}" for f in missing)
     history_str = format_conversation_history(conversation_history)
     result = client.generate(
@@ -345,7 +422,8 @@ def get_next_question_from_llm(profile_dict, conversation_history, user_id):
         temperature=0.3,
         lastk=LAST_K,
         session_id=f"{user_id}_questions",
-        rag_usage=False
+        rag_usage=False,
+        websearch=True
     )
     return result["result"].strip()
 
@@ -363,9 +441,13 @@ def update_profile_from_history(session, user_id):
         temperature=TEMPERATURE,
         lastk=LAST_K,
         session_id=user_id,
-        rag_usage=False
+        rag_usage=False,
+        websearch=True
     )
-    parsed = safe_json_load(profile_builder["result"])
+    raw = profile_builder.get("result", "")
+    print("[DEBUG] profile_builder raw result:", repr(raw))
+    parsed = safe_json_load(raw)
+    print("[DEBUG] profile_builder parsed:", parsed)
     if parsed is not None:
         session["profiles"][session["active_profile_index"]] = merge_profile(profile, parsed)
 
@@ -440,38 +522,54 @@ def training_buttons(user_id):
 # Ask next question (strict order)
 # ----------------------------
 async def _ask_next(session, user_id, profile):
-    if not profile.get("job_interests"):
-        q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
-        session["conversation_history"].append({"role": "assistant", "text": q})
-        return create_message(user_id=user_id, text=q)
-
-    if not profile.get("location"):
-        q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
-        session["conversation_history"].append({"role": "assistant", "text": q})
-        return create_message(user_id=user_id, text=q)
-
-    if profile.get("work_experience") is None:
-        q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
-        session["conversation_history"].append({"role": "assistant", "text": q})
-        return create_message(user_id=user_id, text=q)
-
-    if profile.get("transportation_access") is None:
+    # Button-handled fields — send interactive UI with warm bridging text
+    if profile.get("transportation_access") is None and profile.get("job_interests") and profile.get("location") and profile.get("work_experience") is not None:
         session["conversation_history"].append({"role": "assistant", "text": "[Sent transportation options]"})
-        return transportation_buttons(user_id)
+        return create_buttoned_message(
+            user_id=user_id,
+            text="Great, thanks! I just need a bit more information before I can give you my best recommendations. How do you usually get around?",
+            buttons=[
+                {"id": "transport_car", "title": "I have a car"},
+                {"id": "transport_transit", "title": "Public transit"},
+                {"id": "transport_limited", "title": "Limited transport"},
+            ]
+        )
 
-    if profile.get("availability") is None:
+    if profile.get("availability") is None and profile.get("transportation_access") is not None:
         session["conversation_history"].append({"role": "assistant", "text": "[Sent availability options]"})
-        return availability_buttons(user_id)
+        return create_buttoned_message(
+            user_id=user_id,
+            text="Almost there! Are you looking for full-time, part-time, or either?",
+            buttons=[
+                {"id": "availability_fulltime", "title": "Full-time"},
+                {"id": "availability_parttime", "title": "Part-time"},
+                {"id": "availability_either", "title": "Either"},
+            ]
+        )
 
-    if profile.get("has_resume") is None:
+    if profile.get("has_resume") is None and profile.get("availability") is not None:
         session["conversation_history"].append({"role": "assistant", "text": "[Sent resume options]"})
-        return resume_buttons(user_id)
+        return create_buttoned_message(
+            user_id=user_id,
+            text="One more thing — do you already have a resume, or would you like help making one?",
+            buttons=[
+                {"id": "resume_yes", "title": "Yes, I have one"},
+                {"id": "resume_no", "title": "No, need help"},
+            ]
+        )
 
-    if profile.get("needs_training") is None:
+    if profile.get("needs_training") is None and profile.get("has_resume") is not None:
         session["conversation_history"].append({"role": "assistant", "text": "[Sent training options]"})
-        return training_buttons(user_id)
+        return create_buttoned_message(
+            user_id=user_id,
+            text="Last question! Would job training or skill-building be useful for you?",
+            buttons=[
+                {"id": "training_yes", "title": "Yes"},
+                {"id": "training_no", "title": "No"},
+            ]
+        )
 
-    # Fallback
+    # All other fields — use LLM for a warm, flowing response
     q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
     session["conversation_history"].append({"role": "assistant", "text": q})
     return create_message(user_id=user_id, text=q)
@@ -513,18 +611,13 @@ async def handle_event(event: BaseEvent):
             })
             profile = active_profile(session)
 
-            # Onboarding: language selected
-            if session["onboarding_step"] == "language" and field == "preferred_language":
-                session["onboarding_step"] = "comfort"
-                session["conversation_history"].append({"role": "assistant", "text": "[Sent English level options]"})
-                return english_level_list(user_id)
+            # # Onboarding: language selected (disabled)
+            # if session["onboarding_step"] == "language" and field == "preferred_language":
+            #     ...
 
-            # Onboarding: comfort level selected
-            if session["onboarding_step"] == "comfort" and field == "english_level":
-                session["onboarding_step"] = "done"
-                next_q = "Great, thanks! Now tell me a little about yourself — what kind of work are you looking for, and where are you located?"
-                session["conversation_history"].append({"role": "assistant", "text": next_q})
-                return create_message(user_id=user_id, text=next_q)
+            # # Onboarding: comfort level selected (disabled)
+            # if session["onboarding_step"] == "comfort" and field == "english_level":
+            #     ...
 
             # Normal flow
             if enough_info(profile):
@@ -553,35 +646,13 @@ async def handle_event(event: BaseEvent):
         session["conversation_history"].append({"role": "assistant", "text": INTRO_MESSAGE})
         return create_message(user_id=user_id, text=INTRO_MESSAGE)
 
-    # Onboarding: language step
-    if session["onboarding_step"] == "language":
-        if "english" in user_message.lower():
-            session["profiles"][0]["preferred_language"] = "English"
-            session["conversation_history"].append({"role": "user", "text": user_message})
-            session["onboarding_step"] = "comfort"
-            session["conversation_history"].append({"role": "assistant", "text": "[Sent English level options]"})
-            return english_level_list(user_id)
-        elif "arabic" in user_message.lower():
-            session["profiles"][0]["preferred_language"] = "Arabic"
-            session["conversation_history"].append({"role": "user", "text": user_message})
-            session["onboarding_step"] = "comfort"
-            session["conversation_history"].append({"role": "assistant", "text": "[Sent English level options]"})
-            return english_level_list(user_id)
-        else:
-            session["conversation_history"].append({"role": "assistant", "text": "[Sent language options]"})
-            return language_buttons(user_id)
+    # # Onboarding: language step (disabled)
+    # if session["onboarding_step"] == "language":
+    #     ...
 
-    # Onboarding: comfort step
-    if session["onboarding_step"] == "comfort":
-        for level in ["beginner", "intermediate", "advanced"]:
-            if level in user_message.lower():
-                session["profiles"][session["active_profile_index"]]["english_level"] = level
-                session["conversation_history"].append({"role": "user", "text": user_message})
-                session["onboarding_step"] = "done"
-                next_q = "Great, thanks! Now tell me a little about yourself — what kind of work are you looking for, and where are you located?"
-                session["conversation_history"].append({"role": "assistant", "text": next_q})
-                return create_message(user_id=user_id, text=next_q)
-        return english_level_list(user_id)
+    # # Onboarding: comfort step (disabled)
+    # if session["onboarding_step"] == "comfort":
+    #     ...
 
     if not user_message:
         return create_message(user_id=user_id, text="Please tell me a little more so I can help.")

@@ -3,8 +3,7 @@ from llmproxy import LLMProxy
 
 client = LLMProxy()
 
-EMPLOYMENT_SESSION = "employment_ma"
-IMMIGRATION_SESSION = "immigration_work_auth"
+SESSION = "rag"
 
 EMPLOYMENT_FOLDER = "data/employment"
 IMMIGRATION_FOLDER = "data/immigration"
@@ -106,10 +105,10 @@ def main():
     print()
 
     print("Uploading employment files...")
-    upload_folder(EMPLOYMENT_FOLDER, EMPLOYMENT_SESSION)
+    upload_folder(EMPLOYMENT_FOLDER, SESSION)
 
     print("\nUploading immigration files...")
-    upload_folder(IMMIGRATION_FOLDER, IMMIGRATION_SESSION)
+    upload_folder(IMMIGRATION_FOLDER, SESSION)
 
     print("\nDone uploading files.")
 
