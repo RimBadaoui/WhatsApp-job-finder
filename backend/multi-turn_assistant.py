@@ -70,6 +70,7 @@ def get_session(user_id):
             "greeted": False,
             "onboarding_step": "done",  # language/comfort steps disabled for now
             "awaiting_profile_clarification": False,
+            "recommendation_sent": False,  # track whether we've already sent recommendations
         }
     return user_sessions[user_id]
 
@@ -181,6 +182,46 @@ Schema:
 }
 '''
 
+FOLLOWUP_PROMPT = '''
+You are a warm, knowledgeable employment support assistant helping immigrants in Greater Boston.
+
+The user has already received job resource recommendations. They are now asking a follow-up question.
+
+Your job:
+- Answer their specific follow-up question helpfully and concisely.
+- If they ask what happens after filling out a form or contacting an org, explain the general process warmly.
+- If they ask about a specific organization from the recommendations, give helpful context and include its URL.
+- If they ask about a resource not in the original recommendations, use web search to find it and include its verified URL.
+- If they ask something outside employment support, politely redirect.
+- Keep your response short — 2-4 sentences max.
+- Do not repeat the full recommendations list unless explicitly asked.
+- If you mention any organization, always include its URL in parentheses.
+
+Return only the response text.
+'''
+
+POST_RECOMMENDATION_CLASSIFIER_PROMPT = '''
+You are a router for an employment support chatbot.
+
+The user has already received job resource recommendations. Classify their new message into one of these categories:
+
+- "followup": the message is a natural continuation of the recommendations — e.g. asking what happens next, asking about one of the recommended organizations, asking for more details about a resource, or general next-step questions. This includes messages that mention another person in the context of a follow-up (e.g. "He filled out the form, what happens now?" — this is a follow-up about the existing recommendation, not a new job search).
+- "new_profile": the user is explicitly starting a NEW job search for themselves or someone else (e.g. "my husband also needs a job", "can you help my sister find work", "I want to look for a different job")
+- "employment": a new employment-related question not directly tied to the prior recommendations (e.g. "what other training programs exist?", "how do I write a cover letter?")
+- "legal": the message is about visas, green cards, asylum, undocumented status, work authorization, immigration papers
+- "other": clearly unrelated to employment (e.g. weather, sports, personal relationships, health)
+
+Key distinction for "followup" vs "new_profile":
+- If the message is about what happens NEXT with an existing recommendation → "followup"
+- If the message is asking to START a new job search for a different person or different goal → "new_profile"
+- "He filled out the form" or "She applied" = followup (acting on existing recommendation)
+- "He also needs a job" or "She is looking for work too" = new_profile
+
+Use the recent conversation for context — a short or ambiguous message like "what happens now?" or "and then?" is almost certainly a "followup".
+
+Return only one word: followup, new_profile, employment, legal, or other.
+'''
+
 NEXT_QUESTION_PROMPT = '''
 You are a warm, conversational employment support assistant helping immigrants in Greater Boston.
 
@@ -206,15 +247,30 @@ Return only the response text, nothing else.
 RECOMMENDATION_PROMPT = '''
 You are an AI assistant helping immigrants in Greater Boston find employment resources, job opportunities, and workforce training programs.
 
+KNOWN VERIFIED URLS — always use these exact URLs for these organizations, never guess or construct alternatives:
+- MassHire (any location, any career center): https://masshireboston.org/
+- MassHire JobQuest (job listings): https://jobquest.mass.gov/
+- Boston Public Library Job Help: https://www.bpl.org/jobs-and-careers/
+- International Institute of New England: https://iine.org/
+- JVS Boston: https://www.jvs-boston.org/
+
+CRITICAL — follow this order exactly before writing your response:
+1. Use web search to find real organizations in Greater Boston that match this user's profile (job interest, location, language, transportation, training needs).
+2. From your search results, collect the exact organization name and URL as they appear in the results.
+3. Only recommend organizations that appeared in your search results or in the retrieved documents.
+4. Use the exact name and URL from the search result — do not alter, guess, or paraphrase organization names or URLs.
+5. If a search result does not include a working URL, do not include that organization.
+6. Do not recommend any organization you did not find via search or RAG in this session.
+
 Rules:
 1. DO NOT provide legal advice about immigration, visas, asylum, green cards, or work authorization.
-2. DO NOT make up information. Only use information supported by the retrieved sources.
+2. DO NOT make up information. Only recommend organizations confirmed by your search results or retrieved documents.
 3. If unsure, say "I'm not sure" and suggest a trusted organization.
 4. DO NOT ask for sensitive personal information.
 5. Keep responses simple, clear, supportive, and easy to understand.
 6. Stay focused on employment support only.
 7. Do not guarantee outcomes or make promises.
-8. You MUST include the full URL (e.g. https://www.example.org) for every resource you mention. Get URLs from the retrieved documents or web search. Never omit a URL — if you cannot find one, do not include that resource.
+8. Every resource MUST include its full website URL in parentheses. If you cannot find a verified URL from search results or retrieved documents, do not include that resource.
 
 Personalization rules — you MUST apply ALL of these:
 - If the user has a name, address them by name in the opening line.
@@ -234,32 +290,47 @@ Your response should:
 4. Close with an encouraging line.
 5. Include a brief disclaimer if legal topics arose.
 
-IMPORTANT: Every resource MUST include its full website URL in parentheses. Use web search to find the correct URL for each organization. If you cannot find a verified URL for a resource, do not include that resource.
-
 Do not output JSON.
 '''
+
+VERIFIER_PROMPT = """
+You are a fact-checker for an employment resource chatbot.
+
+You will receive a draft response recommending organizations and resources to a job-seeker.
+
+Your job:
+1. For each organization or resource mentioned, check if it has a valid, complete URL in parentheses next to it.
+2. If a resource has NO URL, remove that resource entirely from the response.
+3. If a resource has a malformed or obviously fake URL (e.g. "https://example.com", placeholder text, or a URL that is just a domain root with no relevance), remove that resource.
+4. Do not add, invent, or look up any new organizations or URLs.
+5. Do not add any new text, lines, or resources that were not in the original response.
+6. Do not change any other part of the response — keep the tone, structure, and personalization intact.
+
+Return the corrected response text only. No explanations.
+"""
 
 # ----------------------------
 # Helpers
 # ----------------------------
 def _is_dead_url(url: str) -> bool:
-    """Return True if the URL is unreachable, returns an error, or soft-redirects to the homepage."""
+    """Return True only if the URL is clearly unreachable or returns a hard error."""
+    import socket
+    from urllib.parse import urlparse
     try:
-        resp = requests.get(url, allow_redirects=True, timeout=5,
+        # First check DNS — if the domain doesn't resolve, it's dead
+        hostname = urlparse(url).hostname
+        if hostname:
+            socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return True  # Domain doesn't exist
+    try:
+        resp = requests.get(url, allow_redirects=True, timeout=8,
                             headers={"User-Agent": "Mozilla/5.0"})
         if resp.status_code >= 400:
             return True
-        # Soft-404 detection: if we were redirected away to just the root domain, the page doesn't exist
-        from urllib.parse import urlparse
-        requested = urlparse(url)
-        final = urlparse(resp.url)
-        requested_has_path = requested.path.strip("/") != ""
-        final_is_root = final.path.strip("/") == ""
-        if requested_has_path and final_is_root and requested.netloc == final.netloc:
-            return True
         return False
     except requests.RequestException:
-        return True
+        return False  # Network timeout — don't strip, could be a real slow site
 
 def remove_dead_links(text: str) -> str:
     """Find all URLs in text, verify each one, and remove any that are dead or soft-404."""
@@ -270,6 +341,20 @@ def remove_dead_links(text: str) -> str:
     # Clean up empty parentheses left behind, e.g. "Name ()" or "Name ( )"
     text = re.sub(r'\(\s*\)', '', text)
     return text.strip()
+
+def verify_recommendations(rec_text: str) -> str:
+    """Post-generation verifier: strips any resource that has no valid URL."""
+    result = client.generate(
+        model=MODEL_NAME,
+        system=VERIFIER_PROMPT,
+        query=rec_text,
+        temperature=0.0,
+        lastk=1,
+        session_id="verifier",
+        rag_usage=False,
+        websearch=False  # critical — no web search here or it will hallucinate new URLs
+    )
+    return result["result"].strip()
 
 def safe_json_load(text: str):
     # Strip markdown code fences if present (e.g. ```json ... ```)
@@ -350,6 +435,23 @@ def build_profile_summary(profile_dict):
 def format_conversation_history(history):
     return "\n".join(f"{t['role'].capitalize()}: {t['text']}" for t in history)
 
+def classify_post_recommendation(user_message: str, user_id: str, session: dict) -> str:
+    history_str = format_conversation_history(session["conversation_history"][-6:])  # last 3 turns
+    result = client.generate(
+        model=MODEL_NAME,
+        system=POST_RECOMMENDATION_CLASSIFIER_PROMPT,
+        query=(
+            f"RECENT CONVERSATION:\n{history_str}\n\n"
+            f"NEW USER MESSAGE: {user_message}"
+        ),
+        temperature=0.0,
+        lastk=1,
+        session_id=f"{user_id}_postroute",
+        rag_usage=False,
+        websearch=False
+    )
+    return result["result"].strip().lower()
+
 def classify_scope(user_message: str, user_id: str, session: dict) -> str:
     # During intake, trust all responses as employment-related
     if session.get("onboarding_step") == "done":
@@ -387,14 +489,23 @@ def build_recommendation_with_rag(profile_dict, user_id):
         model=MODEL_NAME,
         system=RECOMMENDATION_PROMPT,
         query=(
-            "Use the retrieved documents and web search to write a personalized recommendation for this user.\n\n"
+            "STEP 1: Use web search to find real organizations in Greater Boston that match this user's profile. "
+            "Search specifically for their job interest first (e.g. 'artist jobs Boston immigrants', 'nursing training Boston', 'construction jobs Cambridge'). "
+            "Prioritize organizations that are SPECIFIC to their field over general job boards. "
+            "Only include general resources like MassHire or job boards if you cannot find enough field-specific ones.\n\n"
+            "STEP 2: For each organization found, do a second web search to confirm its exact homepage URL. "
+            "Only use the URL that appears directly in search results — never construct or guess a URL.\n\n"
+            "STEP 3: Write the personalized recommendation using ONLY organizations confirmed in STEP 1 and STEP 2. "
+            "Field-specific organizations must appear BEFORE general job boards in the response. "
+            "Do not include any organization you did not find in this session.\n\n"
             f"USER PROFILE:\n{profile_summary}\n\n"
             "You MUST reference their specific job interest, location, availability, English level, "
             "transportation access, resume status, and training needs in your response. "
             "Do not write a generic response — every recommendation must explain why it fits this specific person.\n"
-            "IMPORTANT: For every organization you recommend, include its URL in parentheses next to the resource name. "
-            "Always use the URL that appears in the retrieved documents first — do not replace or override it with a web search result. "
-            "Only use web search to find a URL if the retrieved documents do not provide one for that organization.\n"
+            "IMPORTANT: Find at least 4-5 organizations so that even if some are removed during verification, "
+            "the user still receives at least 2-3 solid recommendations. "
+            "Every resource must include its exact URL from your search results or retrieved documents. "
+            "Do not modify, guess, or construct URLs. If you cannot confirm a URL, do not include that resource.\n"
         ),
         temperature=TEMPERATURE,
         lastk=LAST_K,
@@ -405,7 +516,47 @@ def build_recommendation_with_rag(profile_dict, user_id):
 
     print("[DEBUG] Full RAG response keys:", recommendation.keys())
     print("[DEBUG] Full RAG response:", json.dumps(recommendation, indent=2, ensure_ascii=False))
-    result = remove_dead_links(recommendation["result"])
+    print("[DEBUG] RAG context length:", len(recommendation.get("rag_context", "")))
+    print("[DEBUG] RAG context preview:", recommendation.get("rag_context", "")[:300])
+
+    raw_result = recommendation.get("result", "").strip()
+    print("[DEBUG] Raw result before link check:", raw_result[:500])
+
+    # Fallback: if RAG returns empty, retry with a simpler query and no RAG
+    if not raw_result:
+        print("[DEBUG] RAG returned empty result — falling back to web search only")
+        profile_summary = build_profile_summary(profile_dict)
+        fallback = client.generate(
+            model=MODEL_NAME,
+            system=RECOMMENDATION_PROMPT,
+            query=(
+                f"Find real employment resources in Greater Boston for this person and write a personalized recommendation.\n\n"
+                f"USER PROFILE:\n{profile_summary}\n\n"
+                "Search the web for organizations matching their job interest and location. "
+                "Only include organizations with confirmed URLs from your search results."
+            ),
+            temperature=TEMPERATURE,
+            lastk=LAST_K,
+            session_id=f"{user_id}_fallback",
+            rag_usage=False,
+            websearch=True
+        )
+        print("[DEBUG] Fallback response:", json.dumps(fallback, indent=2, ensure_ascii=False))
+        raw_result = fallback.get("result", "").strip()
+
+    # If still empty after fallback, return a safe default message
+    if not raw_result:
+        print("[DEBUG] Fallback also returned empty — returning default message")
+        return (
+            "I'm sorry, I wasn't able to find specific resources right now. "
+            "Please try reaching out to MassHire Greater Boston at https://www.masshiregb.org — "
+            "they can help connect you with job opportunities and training programs in your area."
+        )
+
+    result = remove_dead_links(raw_result)
+    print("[DEBUG] After remove_dead_links:", result[:500])
+    result = verify_recommendations(result)
+    print("[DEBUG] After verify_recommendations:", result[:500])
     return result
 
 def get_next_question_from_llm(profile_dict, conversation_history, user_id):
@@ -590,15 +741,25 @@ async def handle_event(event: BaseEvent):
         # Profile clarification buttons
         if interactive_id == "profile_self":
             session["awaiting_profile_clarification"] = False
+            session["recommendation_sent"] = False
+            # Switch back to profile index 0 (the original user's profile)
+            session["active_profile_index"] = 0
             session["conversation_history"].append({"role": "user", "text": "[Selected: For myself]"})
-            return await _ask_next(session, user_id, active_profile(session))
+            profile = active_profile(session)
+            # If we already have enough info for this profile, just say so
+            if enough_info(profile):
+                reply = "Of course! You're looking for nursing roles. Would you like me to search for more resources, or is there something specific I can help you with?"
+                session["conversation_history"].append({"role": "assistant", "text": reply})
+                return create_message(user_id=user_id, text=reply)
+            return await _ask_next(session, user_id, profile)
 
         if interactive_id == "profile_other":
             session["awaiting_profile_clarification"] = False
+            session["recommendation_sent"] = False
             session["profiles"].append(new_profile())
             session["active_profile_index"] = len(session["profiles"]) - 1
             session["conversation_history"].append({"role": "user", "text": "[Selected: For someone else]"})
-            next_q = "Got it! Let me start a new profile. What kind of work are they looking for, and where are they located?"
+            next_q = "Got it! Let me start a new profile for them. What kind of work are they looking for, and where are they located?"
             session["conversation_history"].append({"role": "assistant", "text": next_q})
             return create_message(user_id=user_id, text=next_q)
 
@@ -611,18 +772,10 @@ async def handle_event(event: BaseEvent):
             })
             profile = active_profile(session)
 
-            # # Onboarding: language selected (disabled)
-            # if session["onboarding_step"] == "language" and field == "preferred_language":
-            #     ...
-
-            # # Onboarding: comfort level selected (disabled)
-            # if session["onboarding_step"] == "comfort" and field == "english_level":
-            #     ...
-
-            # Normal flow
             if enough_info(profile):
                 rec = build_recommendation_with_rag(profile, user_id)
                 session["conversation_history"].append({"role": "assistant", "text": rec})
+                session["recommendation_sent"] = True
                 return create_message(user_id=user_id, text=rec)
 
             return await _ask_next(session, user_id, profile)
@@ -646,27 +799,37 @@ async def handle_event(event: BaseEvent):
         session["conversation_history"].append({"role": "assistant", "text": INTRO_MESSAGE})
         return create_message(user_id=user_id, text=INTRO_MESSAGE)
 
-    # # Onboarding: language step (disabled)
-    # if session["onboarding_step"] == "language":
-    #     ...
-
-    # # Onboarding: comfort step (disabled)
-    # if session["onboarding_step"] == "comfort":
-    #     ...
-
     if not user_message:
         return create_message(user_id=user_id, text="Please tell me a little more so I can help.")
 
-    # Scope check — only run when profile is complete
-    scope = classify_scope(user_message, user_id, session)
-    if scope == "legal":
+    # Route the message based on context
+    if session.get("recommendation_sent"):
+        route = classify_post_recommendation(user_message, user_id, session)
+    else:
+        scope = classify_scope(user_message, user_id, session)
+        route = scope  # "employment", "legal", or "other"
+
+    if route == "legal":
         session["conversation_history"].append({"role": "user", "text": user_message})
         session["conversation_history"].append({"role": "assistant", "text": LEGAL_RESPONSE})
         return create_message(user_id=user_id, text=LEGAL_RESPONSE)
-    if scope == "other":
+    if route == "other":
         session["conversation_history"].append({"role": "user", "text": user_message})
         session["conversation_history"].append({"role": "assistant", "text": OUT_OF_SCOPE_RESPONSE})
         return create_message(user_id=user_id, text=OUT_OF_SCOPE_RESPONSE)
+    if route == "new_profile":
+        session["conversation_history"].append({"role": "user", "text": user_message})
+        clarification = "It sounds like someone else needs help too! Are you looking for resources for yourself, or for a friend or family member?"
+        session["conversation_history"].append({"role": "assistant", "text": clarification})
+        session["awaiting_profile_clarification"] = True
+        return create_buttoned_message(
+            user_id=user_id,
+            text=clarification,
+            buttons=[
+                {"id": "profile_self", "title": "For myself"},
+                {"id": "profile_other", "title": "For someone else"},
+            ]
+        )
 
     # Third-party check — only after intake is complete
     if session.get("onboarding_step") == "done" and not session.get("awaiting_profile_clarification"):
@@ -694,6 +857,28 @@ async def handle_event(event: BaseEvent):
 
     session["conversation_history"].append({"role": "user", "text": user_message})
 
+    # If recommendations already sent, handle as follow-up conversation
+    if session.get("recommendation_sent"):
+        history_str = format_conversation_history(session["conversation_history"])
+        followup = client.generate(
+            model=MODEL_NAME,
+            system=FOLLOWUP_PROMPT,
+            query=(
+                f"CONVERSATION SO FAR:\n{history_str}\n\n"
+                f"User's latest message: {user_message}"
+            ),
+            temperature=0.3,
+            lastk=LAST_K,
+            session_id=f"{user_id}_followup",
+            rag_usage=False,
+            websearch=True
+        )
+        reply = followup.get("result", "").strip()
+        if not reply:
+            reply = "That's a great question! I'd recommend reaching out directly to the organization — they'll be able to walk you through exactly what to expect next."
+        session["conversation_history"].append({"role": "assistant", "text": reply})
+        return create_message(user_id=user_id, text=reply)
+
     # Update profile
     update_profile_from_history(session, user_id)
     profile = active_profile(session)
@@ -701,6 +886,7 @@ async def handle_event(event: BaseEvent):
     if enough_info(profile):
         rec = build_recommendation_with_rag(profile, user_id)
         session["conversation_history"].append({"role": "assistant", "text": rec})
+        session["recommendation_sent"] = True
         return create_message(user_id=user_id, text=rec)
 
     return await _ask_next(session, user_id, profile)

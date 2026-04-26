@@ -5,8 +5,8 @@ client = LLMProxy()
 
 SESSION = "rag"
 
-EMPLOYMENT_FOLDER = "data/employment"
-IMMIGRATION_FOLDER = "data/immigration"
+EMPLOYMENT_FOLDER = "backend/data/employment"
+IMMIGRATION_FOLDER = "backend/data/immigration"
 
 TEXT_EXTENSIONS = {".txt", ".md"}
 FILE_EXTENSIONS = {".pdf", ".docx"}
