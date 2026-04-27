@@ -67,10 +67,11 @@ def get_session(user_id):
             "profiles": [new_profile()],
             "active_profile_index": 0,
             "conversation_history": [],
+            "profile_history_start": [0],  # index into conversation_history where each profile started
             "greeted": False,
-            "onboarding_step": "done",  # language/comfort steps disabled for now
+            "onboarding_step": "done",
             "awaiting_profile_clarification": False,
-            "recommendation_sent": False,  # track whether we've already sent recommendations
+            "recommendation_sent": False,
         }
     return user_sessions[user_id]
 
@@ -197,7 +198,6 @@ Your job:
 - If they ask something outside employment support, politely redirect.
 - Keep your response short — 2-4 sentences max.
 - Do not repeat the full recommendations list unless explicitly asked.
-- If you mention any organization, always include its URL in parentheses.
 
 Return only the response text.
 '''
@@ -253,48 +253,48 @@ Return only the response text, nothing else.
 RECOMMENDATION_PROMPT = '''
 You are an AI assistant helping immigrants in Greater Boston find employment resources, job opportunities, and workforce training programs.
 
-KNOWN VERIFIED URLS — always use these exact URLs for these organizations, never guess or construct alternatives:
-- MassHire (any location, any career center): https://masshireboston.org/
-- MassHire JobQuest (job listings): https://jobquest.mass.gov/
-- Boston Public Library Job Help: https://www.bpl.org/jobs-and-careers/
-- International Institute of New England: https://iine.org/
-- JVS Boston: https://www.jvs-boston.org/
-
-CRITICAL — follow this order exactly before writing your response:
-1. Use web search to find real organizations in Greater Boston that match this user's profile (job interest, location, language, transportation, training needs).
-2. From your search results, collect the exact organization name and URL as they appear in the results.
-3. Only recommend organizations that appeared in your search results or in the retrieved documents.
-4. Use the exact name and URL from the search result — do not alter, guess, or paraphrase organization names or URLs.
-5. If a search result does not include a working URL, do not include that organization.
-6. Do not recommend any organization you did not find via search or RAG in this session.
+CRITICAL — follow this exact process before writing your response:
+1. Use web search to find real organizations in Greater Boston that match this user's profile. Search specifically for their job interest first (e.g. "artist jobs Boston immigrants", "nursing training Boston", "construction jobs Cambridge"). Prioritize organizations that are SPECIFIC to their field over general job boards. Only include general resources like MassHire or job boards if you cannot find enough field-specific ones.
+2. For each organization found, do a second web search to confirm its exact homepage URL. Only use the URL that appears directly in search results — never construct or guess a URL.
+3. Find at least 4-5 confirmed organizations so that even if some are removed during verification, the user still receives at least 2-3 solid recommendations.
 
 Rules:
 1. DO NOT provide legal advice about immigration, visas, asylum, green cards, or work authorization.
-2. DO NOT make up information. Only recommend organizations confirmed by your search results or retrieved documents.
-3. If unsure, say "I'm not sure" and suggest a trusted organization.
-4. DO NOT ask for sensitive personal information.
-5. Keep responses simple, clear, supportive, and easy to understand.
-6. Stay focused on employment support only.
-7. Do not guarantee outcomes or make promises.
-8. Every resource MUST include its full website URL in parentheses. If you cannot find a verified URL from search results or retrieved documents, do not include that resource.
+2. DO NOT make up information. Only recommend organizations confirmed by your search results.
+3. DO NOT ask for sensitive personal information.
+4. Keep responses simple, clear, supportive, and easy to understand.
+5. Stay focused on employment support only.
+6. Do not guarantee outcomes or make promises.
+7. Every resource with a URL MUST include its full website URL in parentheses. If you cannot confirm a URL, you may still mention the organization by name without a link rather than omitting it entirely.
 
-Personalization rules — you MUST apply ALL of these:
+Personalization rules — apply ALL of these:
 - If the user has a name, address them by name in the opening line.
-- Mention their specific job interest (e.g. "nursing", "construction") by name — do not say "your field" generically.
+- Mention their specific job interest by name — never say "your field" generically.
 - If they want training, recommend training programs specifically for their job interest.
-- If they have limited English, prioritize bilingual or multilingual programs and mention that explicitly.
-- If they have limited transportation, only recommend organizations accessible by public transit or remote options.
-- If they need a resume, include a specific resume help resource.
-- If they are looking for part-time work, say so and filter recommendations accordingly.
-- Mention their location (e.g. "in East Boston" or "near Chelsea") when referencing nearby resources.
+- If they have limited English, prioritize bilingual or multilingual programs.
+- If they have limited transportation, only recommend transit-accessible or remote options.
+- If they need a resume, include a resume help resource.
+- If they are looking for part-time work, filter accordingly.
+- Mention their location when referencing nearby resources.
 
-Your response should:
-1. Open with a warm, personalized sentence using their name and specific situation.
-2. Recommend 2-4 resources that directly match their job interest, location, and constraints. Format EACH resource exactly like this:
-   *Resource Name* (https://full-url-here.org): One sentence explaining why it fits this person specifically.
-3. Give 2-3 concrete next steps tailored to their profile.
-4. Close with an encouraging line.
-5. Include a brief disclaimer if legal topics arose.
+Your response MUST follow this structure:
+
+1. One warm, personalized opening sentence using their name and specific situation.
+
+2. RESOURCES — 2-4 organizations relevant to their job interest and location, formatted as:
+   *Resource Name* (https://url-here.org): One sentence on why it fits this person.
+   If no URL is available for an org, format as:
+   *Resource Name*: One sentence on why it fits this person.
+
+3. TIPS FOR [THEIR SPECIFIC JOB INTEREST] — 3-4 bullet points of practical field-specific advice that does not require links, such as:
+   - Where job postings for this field are typically found
+   - Certifications or skills that help in this specific field
+   - How immigrants typically break into this field in the Boston area
+   - Relevant local networks, unions, or communities for this field
+
+4. NEXT STEPS — 2-3 concrete actions tailored to their profile.
+
+5. One encouraging closing line.
 
 Do not output JSON.
 '''
@@ -305,87 +305,55 @@ You are a fact-checker for an employment resource chatbot.
 You will receive a draft response recommending organizations and resources to a job-seeker.
 
 Your job:
-1. For each organization or resource mentioned, check if it has a valid, complete URL in parentheses next to it.
-2. If a resource has NO URL, remove that resource entirely from the response.
-3. If a resource has a malformed or obviously fake URL (e.g. "https://example.com", placeholder text, or a URL that is just a domain root with no relevance), remove that resource.
-4. Do not add, invent, or look up any new organizations or URLs.
-5. Do not add any new text, lines, or resources that were not in the original response.
-6. Do not change any other part of the response — keep the tone, structure, and personalization intact.
+1. For each organization or resource mentioned with a URL, check if the URL is valid and complete.
+2. If a resource has a malformed or obviously fake URL (e.g. "https://example.com", placeholder text), remove that URL but keep the organization name.
+3. Do not add, invent, or look up any new organizations or URLs.
+4. Do not add any new text, lines, or resources that were not in the original response.
+5. Do not change any other part of the response — keep the tone, structure, and personalization intact.
+6. Organizations listed without URLs are allowed — do not remove them.
 
 Return the corrected response text only. No explanations.
 """
 
-# ----------------------------
-# Helpers
-# ----------------------------
-def _is_dead_url(url: str) -> bool:
-    """Return True only if the URL is clearly unreachable or returns a hard error."""
-    import socket
-    from urllib.parse import urlparse
-    try:
-        # First check DNS — if the domain doesn't resolve, it's dead
-        hostname = urlparse(url).hostname
-        if hostname:
-            socket.getaddrinfo(hostname, None)
-    except socket.gaierror:
-        return True  # Domain doesn't exist
-    try:
-        resp = requests.get(url, allow_redirects=True, timeout=8,
-                            headers={"User-Agent": "Mozilla/5.0"})
-        if resp.status_code >= 400:
-            return True
-        return False
-    except requests.RequestException:
-        return False  # Network timeout — don't strip, could be a real slow site
+DYNAMIC_OPTIONS_PROMPT = '''
+You are generating quick-reply buttons for a WhatsApp chatbot helping immigrants find jobs in Greater Boston.
 
-def remove_dead_links(text: str) -> str:
-    """Find all URLs in text, verify each one, and remove any that are dead or soft-404."""
-    urls = re.findall(r'https?://[^\s\)\]"\']+', text)
-    for url in set(urls):
-        if _is_dead_url(url):
-            text = text.replace(url, "")
-    # Clean up empty parentheses left behind, e.g. "Name ()" or "Name ( )"
-    text = re.sub(r'\(\s*\)', '', text)
-    return text.strip()
+Given a question the bot just asked, generate exactly 2 specific, meaningful answer options + "Other" as the third button.
 
-def verify_recommendations(rec_text: str) -> str:
-    """Post-generation verifier: strips any resource that has no valid URL."""
-    result = client.generate(
-        model=MODEL_NAME,
-        system=VERIFIER_PROMPT,
-        query=rec_text,
-        temperature=0.0,
-        lastk=1,
-        session_id="verifier",
-        rag_usage=False,
-        websearch=False  # critical — no web search here or it will hallucinate new URLs
-    )
-    return result["result"].strip()
+Rules:
+- Always generate 3 options total: 2 specific answers + {"id": "other_freetext", "title": "Other"}
+- Each option title must be 20 characters or fewer
+- Each option must have a unique short id (snake_case)
+- Options must be SPECIFIC and USEFUL — not meta-categories like "Specific job" or "Job field"
+- For job type questions: give 2 common job categories (e.g. "Healthcare", "Construction")
+- For location questions: give 2 specific Greater Boston neighborhoods/areas (e.g. "East Boston", "Cambridge")
+- For experience questions: give 2 realistic experience levels (e.g. "Some experience", "No experience")
+- Only skip buttons if the question is truly personal and unique (e.g. "What is your name?")
 
-def safe_json_load(text: str):
-    # Strip markdown code fences if present (e.g. ```json ... ```)
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        lines = stripped.splitlines()
-        # Remove first and last fence lines
-        inner = lines[1:] if lines[0].startswith("```") else lines
-        if inner and inner[-1].strip() == "```":
-            inner = inner[:-1]
-        stripped = "\n".join(inner)
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        return None
+Examples:
+- "What kind of work are you looking for?" → ["Healthcare", "Construction", "Other"]
+- "Where in Greater Boston?" → ["East Boston", "Cambridge", "Other"]
+- "Tell me about your work experience" → ["Some experience", "No experience", "Other"]
+- "What is your name?" → use_buttons: false
 
-def merge_profile(current_profile, new_profile_data):
-    merged = current_profile.copy()
-    for key, value in new_profile_data.items():
-        if key not in merged:
-            continue
-        if value is None:
-            continue
-        merged[key] = value
-    return merged
+Return only valid JSON:
+{
+  "use_buttons": true,
+  "question_text": "the question to display",
+  "options": [
+    {"id": "option_id", "title": "Short Label"},
+    {"id": "option_id2", "title": "Short Label 2"},
+    {"id": "other_freetext", "title": "Other"}
+  ]
+}
+
+Or if free text is the only option:
+{
+  "use_buttons": false,
+  "question_text": "the question to display",
+  "options": []
+}
+'''
 
 # ----------------------------
 # Profile helpers
@@ -408,7 +376,6 @@ def get_missing_fields(profile_dict):
         missing.append("whether they want job training or skill-building")
     return missing
 
-# Fields handled by interactive buttons — the LLM should not ask about these as free text
 BUTTON_HANDLED_FIELDS = {
     "transportation access (car, public transit, limited)",
     "availability (full-time, part-time, either)",
@@ -417,7 +384,6 @@ BUTTON_HANDLED_FIELDS = {
 }
 
 def get_llm_askable_fields(profile_dict):
-    """Return only fields the LLM should ask about as free text (not handled by buttons)."""
     return [f for f in get_missing_fields(profile_dict) if f not in BUTTON_HANDLED_FIELDS]
 
 def enough_info(profile_dict):
@@ -445,41 +411,74 @@ def format_conversation_history(history):
     return "\n".join(f"{t['role'].capitalize()}: {t['text']}" for t in history)
 
 # ----------------------------
+# Helpers
+# ----------------------------
+def _is_dead_url(url: str) -> bool:
+    import socket
+    from urllib.parse import urlparse
+    try:
+        hostname = urlparse(url).hostname
+        if hostname:
+            socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return True
+    try:
+        resp = requests.get(url, allow_redirects=True, timeout=8,
+                            headers={"User-Agent": "Mozilla/5.0"})
+        if resp.status_code >= 400:
+            return True
+        return False
+    except requests.RequestException:
+        return False
+
+def remove_dead_links(text: str) -> str:
+    urls = re.findall(r'https?://[^\s\)\]"\']+', text)
+    for url in set(urls):
+        if _is_dead_url(url):
+            text = text.replace(url, "")
+    text = re.sub(r'\(\s*\)', '', text)
+    return text.strip()
+
+def verify_recommendations(rec_text: str) -> str:
+    result = client.generate(
+        model=MODEL_NAME,
+        system=VERIFIER_PROMPT,
+        query=rec_text,
+        temperature=0.0,
+        lastk=1,
+        session_id="verifier",
+        rag_usage=False,
+        websearch=False
+    )
+    return result["result"].strip()
+
+def safe_json_load(text: str):
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        inner = lines[1:] if lines[0].startswith("```") else lines
+        if inner and inner[-1].strip() == "```":
+            inner = inner[:-1]
+        stripped = "\n".join(inner)
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+
+def merge_profile(current_profile, new_profile_data):
+    merged = current_profile.copy()
+    for key, value in new_profile_data.items():
+        if key not in merged:
+            continue
+        if value is None:
+            continue
+        merged[key] = value
+    return merged
+
+# ----------------------------
 # Dynamic button generation
 # ----------------------------
-DYNAMIC_OPTIONS_PROMPT = '''
-You are generating quick-reply options for a WhatsApp chatbot helping immigrants find jobs in Greater Boston.
-
-Given a question the bot just asked, generate answer options a user might select.
-
-Rules:
-- Generate exactly 2 meaningful options + always add "Other" as the last option (3 total)
-- Each option title must be 20 characters or fewer
-- Each option must have a unique short id (snake_case, no spaces)
-- The last option must always be {"id": "other_freetext", "title": "Other"}
-- Only skip buttons entirely if the question is truly open-ended with no reasonable common answers (e.g. "What is your name?")
-
-Return only valid JSON in this format:
-{
-  "use_buttons": true,
-  "question_text": "the question to display",
-  "options": [
-    {"id": "option_id", "title": "Short Label"},
-    {"id": "option_id2", "title": "Short Label 2"},
-    {"id": "other_freetext", "title": "Other"}
-  ]
-}
-
-If buttons are not appropriate, return:
-{
-  "use_buttons": false,
-  "question_text": "the question to display",
-  "options": []
-}
-'''
-
 def generate_dynamic_buttons(question_text: str, user_id: str):
-    """Ask the LLM to generate appropriate button options for a given question."""
     result = client.generate(
         model=MODEL_NAME,
         system=DYNAMIC_OPTIONS_PROMPT,
@@ -496,19 +495,14 @@ def generate_dynamic_buttons(question_text: str, user_id: str):
     return parsed
 
 def send_question_with_dynamic_buttons(user_id: str, question_text: str, session: dict):
-    """Send a question with LLM-generated buttons if appropriate, otherwise plain text."""
     parsed = generate_dynamic_buttons(question_text, user_id)
-
     if parsed and parsed.get("use_buttons") and parsed.get("options"):
         options = parsed["options"]
         display_text = parsed.get("question_text", question_text)
-
-        # Register dynamic button IDs so the interactive handler can process them
         if "dynamic_button_map" not in session:
             session["dynamic_button_map"] = {}
         for opt in options:
             session["dynamic_button_map"][opt["id"]] = opt["title"]
-
         if len(options) <= 3:
             return create_buttoned_message(
                 user_id=user_id,
@@ -516,73 +510,19 @@ def send_question_with_dynamic_buttons(user_id: str, question_text: str, session
                 buttons=[{"id": o["id"], "title": o["title"]} for o in options]
             )
         else:
-            # Use list message for 4-10 options
             return create_list_message(
                 user_id=user_id,
                 text=display_text,
                 button_text="Select an option",
                 rows=[{"id": o["id"], "title": o["title"]} for o in options]
             )
-
-    # Fall back to plain text
     return create_message(user_id=user_id, text=question_text)
 
-
-    missing = []
-    if not profile_dict.get("job_interests"):
-        missing.append("job interests (what kind of work they're looking for)")
-    if not profile_dict.get("location"):
-        missing.append("location (what area they live in or want to work in)")
-    if profile_dict.get("work_experience") is None:
-        missing.append("past work experience")
-    if profile_dict.get("transportation_access") is None:
-        missing.append("transportation access (car, public transit, limited)")
-    if profile_dict.get("availability") is None:
-        missing.append("availability (full-time, part-time, either)")
-    if profile_dict.get("has_resume") is None:
-        missing.append("whether they have a resume or need help making one")
-    if profile_dict.get("needs_training") is None:
-        missing.append("whether they want job training or skill-building")
-    return missing
-
-# Fields handled by interactive buttons — the LLM should not ask about these as free text
-BUTTON_HANDLED_FIELDS = {
-    "transportation access (car, public transit, limited)",
-    "availability (full-time, part-time, either)",
-    "whether they have a resume or need help making one",
-    "whether they want job training or skill-building",
-}
-
-def get_llm_askable_fields(profile_dict):
-    """Return only fields the LLM should ask about as free text (not handled by buttons)."""
-    return [f for f in get_missing_fields(profile_dict) if f not in BUTTON_HANDLED_FIELDS]
-
-def enough_info(profile_dict):
-    return len(get_missing_fields(profile_dict)) == 0
-
-def build_profile_summary(profile_dict):
-    return (
-        f"Name: {profile_dict.get('name') or 'Unknown'}\n"
-        f"Preferred language: {profile_dict.get('preferred_language') or 'Unknown'}\n"
-        f"English level: {profile_dict.get('english_level') or 'Unknown'}\n"
-        f"Location: {profile_dict.get('location') or 'Unknown'}\n"
-        f"Employment goal: {profile_dict.get('employment_goal') or 'Unknown'}\n"
-        f"Job interests: {', '.join(profile_dict['job_interests']) if profile_dict.get('job_interests') else 'Unknown'}\n"
-        f"Work experience: {profile_dict.get('work_experience') or 'Unknown'}\n"
-        f"Transportation access: {profile_dict.get('transportation_access') or 'Unknown'}\n"
-        f"Needs nearby work: {profile_dict.get('needs_nearby_work', False)}\n"
-        f"Needs remote work: {profile_dict.get('needs_remote_work', False)}\n"
-        f"Needs training: {profile_dict.get('needs_training')}\n"
-        f"Needs worker rights help: {profile_dict.get('needs_worker_rights_help', False)}\n"
-        f"Availability: {profile_dict.get('availability') or 'Unknown'}\n"
-        f"Has resume: {profile_dict.get('has_resume') or 'Unknown'}"
-    )
-
-def format_conversation_history(history):
-    return "\n".join(f"{t['role'].capitalize()}: {t['text']}" for t in history)
-
+# ----------------------------
+# Classifiers
+# ----------------------------
 def classify_post_recommendation(user_message: str, user_id: str, session: dict) -> str:
-    history_str = format_conversation_history(session["conversation_history"][-6:])  # last 3 turns
+    history_str = format_conversation_history(session["conversation_history"][-6:])
     result = client.generate(
         model=MODEL_NAME,
         system=POST_RECOMMENDATION_CLASSIFIER_PROMPT,
@@ -599,7 +539,6 @@ def classify_post_recommendation(user_message: str, user_id: str, session: dict)
     return result["result"].strip().lower()
 
 def classify_scope(user_message: str, user_id: str, session: dict) -> str:
-    # During intake, trust all responses as employment-related
     if session.get("onboarding_step") == "done":
         missing = get_missing_fields(active_profile(session))
         if missing:
@@ -631,6 +570,9 @@ def classify_third_party(user_message: str, user_id: str) -> str:
 
 def build_recommendation_with_rag(profile_dict, user_id):
     profile_summary = build_profile_summary(profile_dict)
+    print("[DEBUG] Building recommendation for profile:", json.dumps(profile_dict, indent=2, ensure_ascii=False))
+    if not profile_dict.get("job_interests"):
+        print("[DEBUG] WARNING: job_interests is empty — recommendation will be generic")
     recommendation = client.generate(
         model=MODEL_NAME,
         system=RECOMMENDATION_PROMPT,
@@ -651,7 +593,7 @@ def build_recommendation_with_rag(profile_dict, user_id):
             "IMPORTANT: Find at least 4-5 organizations so that even if some are removed during verification, "
             "the user still receives at least 2-3 solid recommendations. "
             "Every resource must include its exact URL from your search results or retrieved documents. "
-            "Do not modify, guess, or construct URLs. If you cannot confirm a URL, do not include that resource.\n"
+            "Do not modify, guess, or construct URLs. If you cannot confirm a URL, still include the organization name without a URL.\n"
         ),
         temperature=TEMPERATURE,
         lastk=LAST_K,
@@ -668,10 +610,8 @@ def build_recommendation_with_rag(profile_dict, user_id):
     raw_result = recommendation.get("result", "").strip()
     print("[DEBUG] Raw result before link check:", raw_result[:500])
 
-    # Fallback: if RAG returns empty, retry with a simpler query and no RAG
     if not raw_result:
         print("[DEBUG] RAG returned empty result — falling back to web search only")
-        profile_summary = build_profile_summary(profile_dict)
         fallback = client.generate(
             model=MODEL_NAME,
             system=RECOMMENDATION_PROMPT,
@@ -690,12 +630,11 @@ def build_recommendation_with_rag(profile_dict, user_id):
         print("[DEBUG] Fallback response:", json.dumps(fallback, indent=2, ensure_ascii=False))
         raw_result = fallback.get("result", "").strip()
 
-    # If still empty after fallback, return a safe default message
     if not raw_result:
         print("[DEBUG] Fallback also returned empty — returning default message")
         return (
             "I'm sorry, I wasn't able to find specific resources right now. "
-            "Please try reaching out to MassHire Greater Boston at https://www.masshiregb.org — "
+            "Please try reaching out to MassHire Greater Boston at https://masshireboston.org/ — "
             "they can help connect you with job opportunities and training programs in your area."
         )
 
@@ -726,7 +665,10 @@ def get_next_question_from_llm(profile_dict, conversation_history, user_id):
 
 def update_profile_from_history(session, user_id):
     profile = active_profile(session)
-    history_str = format_conversation_history(session["conversation_history"])
+    # Only use conversation history from when this profile started
+    profile_start = session.get("profile_history_start", [0])[session["active_profile_index"]]
+    relevant_history = session["conversation_history"][profile_start:]
+    history_str = format_conversation_history(relevant_history)
     profile_builder = client.generate(
         model=MODEL_NAME,
         system=PROFILE_BUILDER_PROMPT,
@@ -819,7 +761,6 @@ def training_buttons(user_id):
 # Ask next question (strict order)
 # ----------------------------
 async def _ask_next(session, user_id, profile):
-    # Button-handled fields — send interactive UI with warm bridging text
     if profile.get("transportation_access") is None and profile.get("job_interests") and profile.get("location") and profile.get("work_experience") is not None:
         session["conversation_history"].append({"role": "assistant", "text": "[Sent transportation options]"})
         return create_buttoned_message(
@@ -866,7 +807,6 @@ async def _ask_next(session, user_id, profile):
             ]
         )
 
-    # All other fields — use LLM for a warm, flowing response with dynamic buttons
     q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
     session["conversation_history"].append({"role": "assistant", "text": q})
     return send_question_with_dynamic_buttons(user_id, q, session)
@@ -884,15 +824,12 @@ async def handle_event(event: BaseEvent):
         interactive_id = getattr(event, "interaction_id", None)
         print(f"[DEBUG] Resolved interactive_id: {interactive_id}")
 
-        # Profile clarification buttons
         if interactive_id == "profile_self":
             session["awaiting_profile_clarification"] = False
             session["recommendation_sent"] = False
-            # Switch back to profile index 0 (the original user's profile)
             session["active_profile_index"] = 0
             session["conversation_history"].append({"role": "user", "text": "[Selected: For myself]"})
             profile = active_profile(session)
-            # If we already have enough info for this profile, just say so
             if enough_info(profile):
                 reply = "Of course! You're looking for nursing roles. Would you like me to search for more resources, or is there something specific I can help you with?"
                 session["conversation_history"].append({"role": "assistant", "text": reply})
@@ -904,18 +841,16 @@ async def handle_event(event: BaseEvent):
             session["recommendation_sent"] = False
             session["profiles"].append(new_profile())
             session["active_profile_index"] = len(session["profiles"]) - 1
+            # Mark where this new profile's history starts
+            session["profile_history_start"].append(len(session["conversation_history"]))
             session["conversation_history"].append({"role": "user", "text": "[Selected: For someone else]"})
-            next_q = "Got it! Let me start a new profile for them. What kind of work are they looking for, and where are they located?"
-            session["conversation_history"].append({"role": "assistant", "text": next_q})
-            return create_message(user_id=user_id, text=next_q)
+            update_profile_from_history(session, user_id)
+            return await _ask_next(session, user_id, active_profile(session))
 
         if interactive_id and interactive_id in INTERACTIVE_FIELD_MAP:
             field, value = INTERACTIVE_FIELD_MAP[interactive_id]
             session["profiles"][session["active_profile_index"]][field] = value
-            session["conversation_history"].append({
-                "role": "user",
-                "text": f"[Selected: {value}]"
-            })
+            session["conversation_history"].append({"role": "user", "text": f"[Selected: {value}]"})
             profile = active_profile(session)
 
             if enough_info(profile):
@@ -926,10 +861,8 @@ async def handle_event(event: BaseEvent):
 
             return await _ask_next(session, user_id, profile)
 
-        # Handle dynamically generated button responses
         dynamic_map = session.get("dynamic_button_map", {})
         if interactive_id and interactive_id in dynamic_map:
-            # "Other" — ask user to type their answer
             if interactive_id == "other_freetext":
                 session["conversation_history"].append({"role": "user", "text": "[Selected: Other]"})
                 reply = "Sure! Please type your answer and I'll use that."
@@ -937,10 +870,15 @@ async def handle_event(event: BaseEvent):
                 return create_message(user_id=user_id, text=reply)
 
             selected_value = dynamic_map[interactive_id]
-            session["conversation_history"].append({
-                "role": "user",
-                "text": selected_value
-            })
+            # Find the last assistant question to give context to the profile builder
+            last_question = ""
+            for entry in reversed(session["conversation_history"]):
+                if entry["role"] == "assistant" and not entry["text"].startswith("["):
+                    last_question = entry["text"]
+                    break
+            # Inject as a natural answer with context so profile builder can parse it correctly
+            contextual_answer = f"{last_question} — {selected_value}"
+            session["conversation_history"].append({"role": "user", "text": contextual_answer})
             update_profile_from_history(session, user_id)
             profile = active_profile(session)
 
@@ -965,29 +903,19 @@ async def handle_event(event: BaseEvent):
             media_uri = media_uri_from_event(event.raw)
             if not media_uri:
                 return create_message(user_id=user_id, text="I couldn't access your voice message. Could you type your message instead?")
-
             audio_bytes = download_media(media_uri)
-
-            # Transcribe using OpenAI Whisper
             import openai, tempfile, os
             with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
                 f.write(audio_bytes)
                 tmp_path = f.name
             with open(tmp_path, "rb") as audio_file:
-                transcript = openai.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file
-                )
+                transcript = openai.audio.transcriptions.create(model="whisper-1", file=audio_file)
             os.unlink(tmp_path)
             transcribed_text = transcript.text.strip()
-
             if not transcribed_text:
                 return create_message(user_id=user_id, text="I couldn't understand your voice message. Could you type your message instead?")
-
             print(f"[DEBUG] Audio transcribed: {transcribed_text}")
-            # Reuse text handling by converting to TextEvent
             event = TextEvent(user_id=user_id, text=transcribed_text)
-
         except Exception as e:
             print(f"[DEBUG] Audio error: {e}")
             return create_message(user_id=user_id, text="I'm having trouble with voice messages right now. Could you type your message instead?")
@@ -1000,7 +928,6 @@ async def handle_event(event: BaseEvent):
     user_message = event.text.strip()
     session = get_session(user_id)
 
-    # First message — greeting
     if not session["greeted"]:
         session["greeted"] = True
         session["conversation_history"].append({"role": "assistant", "text": INTRO_MESSAGE})
@@ -1009,60 +936,7 @@ async def handle_event(event: BaseEvent):
     if not user_message:
         return create_message(user_id=user_id, text="Please tell me a little more so I can help.")
 
-    # Route the message based on context
-    if session.get("recommendation_sent"):
-        route = classify_post_recommendation(user_message, user_id, session)
-    else:
-        scope = classify_scope(user_message, user_id, session)
-        route = scope  # "employment", "legal", or "other"
-
-    if route == "legal":
-        session["conversation_history"].append({"role": "user", "text": user_message})
-        session["conversation_history"].append({"role": "assistant", "text": LEGAL_RESPONSE})
-        return create_message(user_id=user_id, text=LEGAL_RESPONSE)
-    if route == "other":
-        session["conversation_history"].append({"role": "user", "text": user_message})
-        session["conversation_history"].append({"role": "assistant", "text": OUT_OF_SCOPE_RESPONSE})
-        return create_message(user_id=user_id, text=OUT_OF_SCOPE_RESPONSE)
-    if route == "new_profile":
-        session["conversation_history"].append({"role": "user", "text": user_message})
-        clarification = "It sounds like someone else needs help too! Are you looking for resources for yourself, or for a friend or family member?"
-        session["conversation_history"].append({"role": "assistant", "text": clarification})
-        session["awaiting_profile_clarification"] = True
-        return create_buttoned_message(
-            user_id=user_id,
-            text=clarification,
-            buttons=[
-                {"id": "profile_self", "title": "For myself"},
-                {"id": "profile_other", "title": "For someone else"},
-            ]
-        )
-
-    # Third-party check — only after intake is complete
-    if session.get("onboarding_step") == "done" and not session.get("awaiting_profile_clarification"):
-        missing = get_missing_fields(active_profile(session))
-        if not missing:
-            third_party = classify_third_party(user_message, user_id)
-            if third_party == "other":
-                session["awaiting_profile_clarification"] = True
-                clarification = "It sounds like you might be asking about someone else. Are you looking for resources for yourself, or for a friend or family member?"
-                session["conversation_history"].append({"role": "user", "text": user_message})
-                session["conversation_history"].append({"role": "assistant", "text": clarification})
-                return create_buttoned_message(
-                    user_id=user_id,
-                    text=clarification,
-                    buttons=[
-                        {"id": "profile_self", "title": "For myself"},
-                        {"id": "profile_other", "title": "For someone else"},
-                    ]
-                )
-    elif session.get("awaiting_profile_clarification"):
-        session["awaiting_profile_clarification"] = False
-        if any(w in user_message.lower() for w in ["someone else", "friend", "family", "sister", "brother", "spouse", "husband", "wife", "parent"]):
-            session["profiles"].append(new_profile())
-            session["active_profile_index"] = len(session["profiles"]) - 1
-
-    # If recommendations already sent, handle as follow-up conversation
+    # If recommendations already sent, route post-recommendation messages
     if session.get("recommendation_sent"):
         route = classify_post_recommendation(user_message, user_id, session)
         print(f"[DEBUG] Post-recommendation route: {route}")
@@ -1106,7 +980,6 @@ async def handle_event(event: BaseEvent):
         reply = followup.get("result", "").strip()
         if not reply:
             reply = "That's a great question! I'd recommend reaching out directly to the organization — they'll be able to walk you through exactly what to expect next."
-        # If the follow-up response contains URLs, run it through the same verification pipeline
         if "http" in reply:
             reply = remove_dead_links(reply)
             reply = verify_recommendations(reply)
@@ -1116,7 +989,42 @@ async def handle_event(event: BaseEvent):
         session["conversation_history"].append({"role": "assistant", "text": reply})
         return create_message(user_id=user_id, text=reply)
 
-    # Update profile
+    # Scope check during intake
+    scope = classify_scope(user_message, user_id, session)
+    if scope == "legal":
+        session["conversation_history"].append({"role": "user", "text": user_message})
+        session["conversation_history"].append({"role": "assistant", "text": LEGAL_RESPONSE})
+        return create_message(user_id=user_id, text=LEGAL_RESPONSE)
+    if scope == "other":
+        session["conversation_history"].append({"role": "user", "text": user_message})
+        session["conversation_history"].append({"role": "assistant", "text": OUT_OF_SCOPE_RESPONSE})
+        return create_message(user_id=user_id, text=OUT_OF_SCOPE_RESPONSE)
+
+    # Third-party check
+    if session.get("onboarding_step") == "done" and not session.get("awaiting_profile_clarification"):
+        missing = get_missing_fields(active_profile(session))
+        if not missing:
+            third_party = classify_third_party(user_message, user_id)
+            if third_party == "other":
+                session["awaiting_profile_clarification"] = True
+                clarification = "It sounds like you might be asking about someone else. Are you looking for resources for yourself, or for a friend or family member?"
+                session["conversation_history"].append({"role": "user", "text": user_message})
+                session["conversation_history"].append({"role": "assistant", "text": clarification})
+                return create_buttoned_message(
+                    user_id=user_id,
+                    text=clarification,
+                    buttons=[
+                        {"id": "profile_self", "title": "For myself"},
+                        {"id": "profile_other", "title": "For someone else"},
+                    ]
+                )
+    elif session.get("awaiting_profile_clarification"):
+        session["awaiting_profile_clarification"] = False
+        if any(w in user_message.lower() for w in ["someone else", "friend", "family", "sister", "brother", "spouse", "husband", "wife", "parent"]):
+            session["profiles"].append(new_profile())
+            session["active_profile_index"] = len(session["profiles"]) - 1
+
+    session["conversation_history"].append({"role": "user", "text": user_message})
     update_profile_from_history(session, user_id)
     profile = active_profile(session)
 
