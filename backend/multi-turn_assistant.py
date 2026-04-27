@@ -1,5 +1,5 @@
 from llmproxy import LLMProxy
-from wa_service_sdk import BaseEvent, TextEvent, InteractiveEvent, create_message, create_buttoned_message, create_list_message
+from wa_service_sdk import BaseEvent, TextEvent, InteractiveEvent, AudioEvent, create_message, create_buttoned_message, create_list_message, download_media, media_uri_from_event
 import json
 import re
 import requests
@@ -192,6 +192,8 @@ Your job:
 - If they ask what happens after filling out a form or contacting an org, explain the general process warmly.
 - If they ask about a specific organization from the recommendations, give helpful context and include its URL.
 - If they ask about a resource not in the original recommendations, use web search to find it and include its verified URL.
+- If you recommend ANY organization, you MUST include its URL in parentheses. If you cannot find a confirmed URL via web search, do not mention that organization.
+- Never list organizations without URLs — an org name with no link is not helpful and may be fabricated.
 - If they ask something outside employment support, politely redirect.
 - Keep your response short — 2-4 sentences max.
 - Do not repeat the full recommendations list unless explicitly asked.
@@ -205,19 +207,23 @@ You are a router for an employment support chatbot.
 
 The user has already received job resource recommendations. Classify their new message into one of these categories:
 
-- "followup": the message is a natural continuation of the recommendations — e.g. asking what happens next, asking about one of the recommended organizations, asking for more details about a resource, or general next-step questions. This includes messages that mention another person in the context of a follow-up (e.g. "He filled out the form, what happens now?" — this is a follow-up about the existing recommendation, not a new job search).
-- "new_profile": the user is explicitly starting a NEW job search for themselves or someone else (e.g. "my husband also needs a job", "can you help my sister find work", "I want to look for a different job")
-- "employment": a new employment-related question not directly tied to the prior recommendations (e.g. "what other training programs exist?", "how do I write a cover letter?")
+- "followup": the message is a natural continuation of the recommendations — asking what happens next, asking about a recommended org, asking for more details, asking career/certification questions related to their job interest, or any question that can be answered conversationally without starting a new search.
+- "new_profile": the user is explicitly starting a NEW job search for a DIFFERENT person or a completely different career goal (e.g. "my husband also needs a job", "can you help my sister find work", "actually I want to look for construction jobs instead")
+- "employment": a broad new employment question not tied to their specific situation (e.g. "what is a cover letter?", "how does unemployment work?")
 - "legal": the message is about visas, green cards, asylum, undocumented status, work authorization, immigration papers
 - "other": clearly unrelated to employment (e.g. weather, sports, personal relationships, health)
 
-Key distinction for "followup" vs "new_profile":
-- If the message is about what happens NEXT with an existing recommendation → "followup"
-- If the message is asking to START a new job search for a different person or different goal → "new_profile"
-- "He filled out the form" or "She applied" = followup (acting on existing recommendation)
-- "He also needs a job" or "She is looking for work too" = new_profile
+Examples:
+- "He filled out the form, what happens now?" → followup (acting on existing recommendation)
+- "She applied, what should she do next?" → followup (acting on existing recommendation)
+- "Do I need certification to work as a nurse?" → followup (career question about their job interest)
+- "What about HireCulture?" → followup (asking about a specific resource)
+- "Can I do this part time?" → followup
+- "My husband also needs a job" → new_profile (new job search for different person)
+- "Actually I want construction jobs" → new_profile (completely different goal)
+- "My sister needs help finding work" → new_profile
 
-Use the recent conversation for context — a short or ambiguous message like "what happens now?" or "and then?" is almost certainly a "followup".
+When in doubt, classify as "followup" — it is always safer to answer conversationally than to restart the intake flow.
 
 Return only one word: followup, new_profile, employment, legal, or other.
 '''
@@ -381,7 +387,147 @@ def merge_profile(current_profile, new_profile_data):
         merged[key] = value
     return merged
 
+# ----------------------------
+# Profile helpers
+# ----------------------------
 def get_missing_fields(profile_dict):
+    missing = []
+    if not profile_dict.get("job_interests"):
+        missing.append("job interests (what kind of work they're looking for)")
+    if not profile_dict.get("location"):
+        missing.append("location (what area they live in or want to work in)")
+    if profile_dict.get("work_experience") is None:
+        missing.append("past work experience")
+    if profile_dict.get("transportation_access") is None:
+        missing.append("transportation access (car, public transit, limited)")
+    if profile_dict.get("availability") is None:
+        missing.append("availability (full-time, part-time, either)")
+    if profile_dict.get("has_resume") is None:
+        missing.append("whether they have a resume or need help making one")
+    if profile_dict.get("needs_training") is None:
+        missing.append("whether they want job training or skill-building")
+    return missing
+
+# Fields handled by interactive buttons — the LLM should not ask about these as free text
+BUTTON_HANDLED_FIELDS = {
+    "transportation access (car, public transit, limited)",
+    "availability (full-time, part-time, either)",
+    "whether they have a resume or need help making one",
+    "whether they want job training or skill-building",
+}
+
+def get_llm_askable_fields(profile_dict):
+    """Return only fields the LLM should ask about as free text (not handled by buttons)."""
+    return [f for f in get_missing_fields(profile_dict) if f not in BUTTON_HANDLED_FIELDS]
+
+def enough_info(profile_dict):
+    return len(get_missing_fields(profile_dict)) == 0
+
+def build_profile_summary(profile_dict):
+    return (
+        f"Name: {profile_dict.get('name') or 'Unknown'}\n"
+        f"Preferred language: {profile_dict.get('preferred_language') or 'Unknown'}\n"
+        f"English level: {profile_dict.get('english_level') or 'Unknown'}\n"
+        f"Location: {profile_dict.get('location') or 'Unknown'}\n"
+        f"Employment goal: {profile_dict.get('employment_goal') or 'Unknown'}\n"
+        f"Job interests: {', '.join(profile_dict['job_interests']) if profile_dict.get('job_interests') else 'Unknown'}\n"
+        f"Work experience: {profile_dict.get('work_experience') or 'Unknown'}\n"
+        f"Transportation access: {profile_dict.get('transportation_access') or 'Unknown'}\n"
+        f"Needs nearby work: {profile_dict.get('needs_nearby_work', False)}\n"
+        f"Needs remote work: {profile_dict.get('needs_remote_work', False)}\n"
+        f"Needs training: {profile_dict.get('needs_training')}\n"
+        f"Needs worker rights help: {profile_dict.get('needs_worker_rights_help', False)}\n"
+        f"Availability: {profile_dict.get('availability') or 'Unknown'}\n"
+        f"Has resume: {profile_dict.get('has_resume') or 'Unknown'}"
+    )
+
+def format_conversation_history(history):
+    return "\n".join(f"{t['role'].capitalize()}: {t['text']}" for t in history)
+
+# ----------------------------
+# Dynamic button generation
+# ----------------------------
+DYNAMIC_OPTIONS_PROMPT = '''
+You are generating quick-reply options for a WhatsApp chatbot helping immigrants find jobs in Greater Boston.
+
+Given a question the bot just asked, generate answer options a user might select.
+
+Rules:
+- Generate exactly 2 meaningful options + always add "Other" as the last option (3 total)
+- Each option title must be 20 characters or fewer
+- Each option must have a unique short id (snake_case, no spaces)
+- The last option must always be {"id": "other_freetext", "title": "Other"}
+- Only skip buttons entirely if the question is truly open-ended with no reasonable common answers (e.g. "What is your name?")
+
+Return only valid JSON in this format:
+{
+  "use_buttons": true,
+  "question_text": "the question to display",
+  "options": [
+    {"id": "option_id", "title": "Short Label"},
+    {"id": "option_id2", "title": "Short Label 2"},
+    {"id": "other_freetext", "title": "Other"}
+  ]
+}
+
+If buttons are not appropriate, return:
+{
+  "use_buttons": false,
+  "question_text": "the question to display",
+  "options": []
+}
+'''
+
+def generate_dynamic_buttons(question_text: str, user_id: str):
+    """Ask the LLM to generate appropriate button options for a given question."""
+    result = client.generate(
+        model=MODEL_NAME,
+        system=DYNAMIC_OPTIONS_PROMPT,
+        query=f"Question: {question_text}",
+        temperature=0.0,
+        lastk=1,
+        session_id=f"{user_id}_buttons",
+        rag_usage=False,
+        websearch=False
+    )
+    parsed = safe_json_load(result.get("result", ""))
+    if not parsed:
+        return None
+    return parsed
+
+def send_question_with_dynamic_buttons(user_id: str, question_text: str, session: dict):
+    """Send a question with LLM-generated buttons if appropriate, otherwise plain text."""
+    parsed = generate_dynamic_buttons(question_text, user_id)
+
+    if parsed and parsed.get("use_buttons") and parsed.get("options"):
+        options = parsed["options"]
+        display_text = parsed.get("question_text", question_text)
+
+        # Register dynamic button IDs so the interactive handler can process them
+        if "dynamic_button_map" not in session:
+            session["dynamic_button_map"] = {}
+        for opt in options:
+            session["dynamic_button_map"][opt["id"]] = opt["title"]
+
+        if len(options) <= 3:
+            return create_buttoned_message(
+                user_id=user_id,
+                text=display_text,
+                buttons=[{"id": o["id"], "title": o["title"]} for o in options]
+            )
+        else:
+            # Use list message for 4-10 options
+            return create_list_message(
+                user_id=user_id,
+                text=display_text,
+                button_text="Select an option",
+                rows=[{"id": o["id"], "title": o["title"]} for o in options]
+            )
+
+    # Fall back to plain text
+    return create_message(user_id=user_id, text=question_text)
+
+
     missing = []
     if not profile_dict.get("job_interests"):
         missing.append("job interests (what kind of work they're looking for)")
@@ -720,10 +866,10 @@ async def _ask_next(session, user_id, profile):
             ]
         )
 
-    # All other fields — use LLM for a warm, flowing response
+    # All other fields — use LLM for a warm, flowing response with dynamic buttons
     q = get_next_question_from_llm(profile, session["conversation_history"], user_id)
     session["conversation_history"].append({"role": "assistant", "text": q})
-    return create_message(user_id=user_id, text=q)
+    return send_question_with_dynamic_buttons(user_id, q, session)
 
 # ----------------------------
 # Main WhatsApp handler
@@ -780,10 +926,71 @@ async def handle_event(event: BaseEvent):
 
             return await _ask_next(session, user_id, profile)
 
+        # Handle dynamically generated button responses
+        dynamic_map = session.get("dynamic_button_map", {})
+        if interactive_id and interactive_id in dynamic_map:
+            # "Other" — ask user to type their answer
+            if interactive_id == "other_freetext":
+                session["conversation_history"].append({"role": "user", "text": "[Selected: Other]"})
+                reply = "Sure! Please type your answer and I'll use that."
+                session["conversation_history"].append({"role": "assistant", "text": reply})
+                return create_message(user_id=user_id, text=reply)
+
+            selected_value = dynamic_map[interactive_id]
+            session["conversation_history"].append({
+                "role": "user",
+                "text": selected_value
+            })
+            update_profile_from_history(session, user_id)
+            profile = active_profile(session)
+
+            if enough_info(profile):
+                rec = build_recommendation_with_rag(profile, user_id)
+                session["conversation_history"].append({"role": "assistant", "text": rec})
+                session["recommendation_sent"] = True
+                return create_message(user_id=user_id, text=rec)
+
+            return await _ask_next(session, user_id, profile)
+
         return create_message(
             user_id=user_id,
             text="Sorry, I didn't understand that selection. Could you type your answer instead?"
         )
+
+    # --- Voice/audio messages ---
+    if isinstance(event, AudioEvent):
+        user_id = event.user_id
+        session = get_session(user_id)
+        try:
+            media_uri = media_uri_from_event(event.raw)
+            if not media_uri:
+                return create_message(user_id=user_id, text="I couldn't access your voice message. Could you type your message instead?")
+
+            audio_bytes = download_media(media_uri)
+
+            # Transcribe using OpenAI Whisper
+            import openai, tempfile, os
+            with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
+                f.write(audio_bytes)
+                tmp_path = f.name
+            with open(tmp_path, "rb") as audio_file:
+                transcript = openai.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            os.unlink(tmp_path)
+            transcribed_text = transcript.text.strip()
+
+            if not transcribed_text:
+                return create_message(user_id=user_id, text="I couldn't understand your voice message. Could you type your message instead?")
+
+            print(f"[DEBUG] Audio transcribed: {transcribed_text}")
+            # Reuse text handling by converting to TextEvent
+            event = TextEvent(user_id=user_id, text=transcribed_text)
+
+        except Exception as e:
+            print(f"[DEBUG] Audio error: {e}")
+            return create_message(user_id=user_id, text="I'm having trouble with voice messages right now. Could you type your message instead?")
 
     # --- Text messages ---
     if not isinstance(event, TextEvent):
@@ -855,11 +1062,34 @@ async def handle_event(event: BaseEvent):
             session["profiles"].append(new_profile())
             session["active_profile_index"] = len(session["profiles"]) - 1
 
-    session["conversation_history"].append({"role": "user", "text": user_message})
-
     # If recommendations already sent, handle as follow-up conversation
     if session.get("recommendation_sent"):
-        history_str = format_conversation_history(session["conversation_history"])
+        route = classify_post_recommendation(user_message, user_id, session)
+        print(f"[DEBUG] Post-recommendation route: {route}")
+
+        if route == "legal":
+            session["conversation_history"].append({"role": "user", "text": user_message})
+            session["conversation_history"].append({"role": "assistant", "text": LEGAL_RESPONSE})
+            return create_message(user_id=user_id, text=LEGAL_RESPONSE)
+        if route == "other":
+            session["conversation_history"].append({"role": "user", "text": user_message})
+            session["conversation_history"].append({"role": "assistant", "text": OUT_OF_SCOPE_RESPONSE})
+            return create_message(user_id=user_id, text=OUT_OF_SCOPE_RESPONSE)
+        if route == "new_profile":
+            session["conversation_history"].append({"role": "user", "text": user_message})
+            clarification = "It sounds like someone else needs help too! Are you looking for resources for yourself, or for a friend or family member?"
+            session["conversation_history"].append({"role": "assistant", "text": clarification})
+            session["awaiting_profile_clarification"] = True
+            return create_buttoned_message(
+                user_id=user_id,
+                text=clarification,
+                buttons=[
+                    {"id": "profile_self", "title": "For myself"},
+                    {"id": "profile_other", "title": "For someone else"},
+                ]
+            )
+        # "followup" or "employment" — answer conversationally
+        history_str = format_conversation_history(session["conversation_history"][-10:])
         followup = client.generate(
             model=MODEL_NAME,
             system=FOLLOWUP_PROMPT,
@@ -876,6 +1106,13 @@ async def handle_event(event: BaseEvent):
         reply = followup.get("result", "").strip()
         if not reply:
             reply = "That's a great question! I'd recommend reaching out directly to the organization — they'll be able to walk you through exactly what to expect next."
+        # If the follow-up response contains URLs, run it through the same verification pipeline
+        if "http" in reply:
+            reply = remove_dead_links(reply)
+            reply = verify_recommendations(reply)
+        if not reply:
+            reply = "I found some resources but couldn't verify their links. Please try MassHire Greater Boston at https://masshireboston.org/ for more options."
+        session["conversation_history"].append({"role": "user", "text": user_message})
         session["conversation_history"].append({"role": "assistant", "text": reply})
         return create_message(user_id=user_id, text=reply)
 
